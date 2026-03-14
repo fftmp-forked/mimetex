@@ -394,7 +394,7 @@
  * 11/18/09	J.Forkosh	Version 1.72 released.
  * 11/15/11	J.Forkosh	Version 1.73 released.
  * 02/15/12	J.Forkosh	Version 1.74 released.
- * 02/15/12	J.Forkosh	Most recent revision (also see REVISIONDATE)
+ * 03/31/12	J.Forkosh	Most recent revision (also see REVISIONDATE)
  * See  http://www.forkosh.com/mimetexchangelog.html  for further details.
  *
  ****************************************************************************/
@@ -402,9 +402,9 @@
 /* -------------------------------------------------------------------------
 Program id
 -------------------------------------------------------------------------- */
-#define	VERSION "1.74"		/* mimeTeX version number */
-#define REVISIONDATE "15 February 2012" /* date of most recent revision */
-#define COPYRIGHTTEXT "Copyright(c) 2002-2012, John Forkosh Associates, Inc."
+#define	VERSION "1.74"			/* mimeTeX version number */
+#define REVISIONDATE "31 March 2012" /* date of most recent revision */
+#define COPYRIGHTTEXT "Copyright(c) 2002-2012, John Forkosh Associates, Inc"
 
 /* -------------------------------------------------------------------------
 header files and macros
@@ -424,8 +424,7 @@ messages (used mostly by main() and also by rastmessage())
 -------------------------------------------------------------------------- */
 static	char *copyright1 =		/* copyright, gnu/gpl notice */
  "+-----------------------------------------------------------------------+\n"
- "|mimeTeX vers " VERSION
- ", Copyright(c) 2002-2012, John Forkosh Associates, Inc|\n"
+ "|mimeTeX vers " VERSION ", " COPYRIGHTTEXT                             "|\n"
  "+-----------------------------------------------------------------------+\n"
  "| mimeTeX is free software, licensed to you under terms of the GNU/GPL, |\n"
  "|           and comes with absolutely no warranty whatsoever.           |",
@@ -5821,7 +5820,7 @@ static	struct { char *html; char *args; char *latex; } symbols[] =
 	"see \\homepagetext for details \\end{gather}}}" },
    { "\\versionnumber",	NULL, "{\\text " VERSION "}" },
    { "\\revisiondate",	NULL, "{\\text " REVISIONDATE "}" },
-   { "\\copyrighttext",	NULL, "{\\text " COPYRIGHTTEXT "}" },
+   { "\\copyrighttext",	NULL, "{\\text " COPYRIGHTTEXT ".}" },
    { "\\homepagetext",	NULL,
 	"{\\text http://www.forkosh.com/mimetex.html}" },
    /* --------------------------------------------
@@ -8365,6 +8364,7 @@ switch ( flag )
   case ISMAGSTEP:			/* set magstep */
   case ISDISPLAYSIZE:			/* set displaysize */
   case ISCONTENTTYPE:			/*enable/disable content-type lines*/
+  case ISCONTENTCACHED:			/* write content-type to cache file*/
   case ISSHRINK:			/* set shrinkfactor */
   case ISAAALGORITHM:			/* set anti-aliasing algorithm */
   case ISWEIGHT:			/* set font weight */
@@ -8445,6 +8445,10 @@ switch ( flag )
       case ISCONTENTTYPE:		/*enable/disable content-type lines*/
 	if ( argvalue != NOVALUE )	/* got a value */
 	    isemitcontenttype = (argvalue>0?1:0);
+	break;
+      case ISCONTENTCACHED:		/* write content-type to cache file*/
+	if ( argvalue != NOVALUE )	/* got a value */
+	    iscachecontenttype = (argvalue>0?1:0);
 	break;
       case ISSMASH:			/* set (minimum) "smash" margin */
 	if ( argvalue != NOVALUE )	/* got a value */
@@ -15863,8 +15867,8 @@ if ( adfrequency > 0 ) {		/* advertising enabled */
   if ( (1+rand())%adfrequency == 0 ) {	/* once every adfrequency calls */
     advertisement(expression,adtemplate); } } /*wrap expression in advert*/
 /* ---
- * check for image caching
- * ----------------------- */
+ * check for image caching (and whether or not caching content type)
+ * ----------------------------------------------------------------- */
 if ( strstr(expression,"\\counter")  != NULL /* can't cache \counter{} */
 ||   strstr(expression,"\\input")    != NULL /* can't cache \input{} */
 ||   strstr(expression,"\\today")    != NULL /* can't cache \today */
@@ -15873,6 +15877,10 @@ if ( strstr(expression,"\\counter")  != NULL /* can't cache \counter{} */
 ||   isformdata				/* don't cache user form input */
  ) { iscaching = 0;			/* so turn caching off */
      maxage = 5; }			/* and set max-age to 5 seconds */
+if ( strstr(expression,"\\depth")    != NULL ) /* cache content-type lines */
+     iscachecontenttype = 1;		/* set flag to cache content-type */
+if ( strstr(expression,"\\nodepth")  != NULL ) /* don't cache content-type */
+     iscachecontenttype = 0;		/*set flag to not cache content-type*/
 if ( isquery )				/* don't cache command-line images */
  if ( iscaching )			/* image caching enabled */
   {
