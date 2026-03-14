@@ -15833,7 +15833,8 @@ if ( isquery )				/* not relevant if "interactive" */
  * -------------------------------------------- */
 if ( isquery )				/* not relevant if "interactive" */
  if ( !isinvalidreferer )		/* nor if already invalid referer */
-  { int	iref=0, msgnum=(-999);		/* denyreferer index, message# */
+  { int	iref=0, msgnum=(-999),		/* denyreferer index, message# */
+    whundredths = 0;			/* or wait hundredths of a sec */
     for ( iref=0; msgnum<0; iref++ ) {	/* run through denyreferer[] table */
       char *deny = denyreferer[iref].referer; /* referer to be denied */
       if ( deny == NULL ) break;	/* null signals end-of-table */
@@ -15848,10 +15849,13 @@ if ( isquery )				/* not relevant if "interactive" */
 	if ( isstrstr(http_referer,deny,0) ) /* invalid http_referer */
 	 msgnum = denyreferer[iref].msgnum; /* so set message# */
       } /* --- end-of-for(iref) --- */
-    if ( msgnum >= 0 )			/* deny access to this referer */
-     { if ( msgnum > maxmsgnum ) msgnum = 0; /* keep index within bounds */
-       expression = msgtable[msgnum];	/* set user error message */
-       isinvalidreferer = 1; }		/* and signal invalid referer */
+    if ( msgnum >= 100 ) {		/* wait but don't deny */
+      whundredths = 10*(msgnum-100);	/* hundredths=10*tenths */
+      msgnum = (-999); }		/* reset valid referer */
+    if ( msgnum >= 0 ) {		/* deny access to this referer */
+      if ( msgnum > maxmsgnum ) msgnum = 0; /* keep index within bounds */
+      expression = msgtable[msgnum];	/* set user error message */
+      isinvalidreferer = 1; }		/* and signal invalid referer */
   } /* --- end-of-if(!isinvalidreferer) --- */
 /* --- also check maximum query_string length if no http_referer given --- */
 if ( isquery )				/* not relevant if "interactive" */
