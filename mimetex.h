@@ -304,7 +304,7 @@ mathchardef
  * ----------------------- */
 STATIC	int  nfontinfo			/* legal font#'s are 1...nfontinfo */
 #ifdef INITVALS
-  = 11
+  = 12
 #endif
   ;
 STATIC	struct {char *name; int family; int istext; int class;}
@@ -324,6 +324,7 @@ STATIC	struct {char *name; int family; int istext; int class;}
     { "\\textgreek",CMMI10GR,1,-1 }, /*(9) \textgreek{ab}-->\alpha\beta */
     { "\\textbfgreek",CMMI10BGR,1,-1 },/*(10)\textbfgreek{ab}-->\alpha\beta*/
     { "\\textbbgreek",BBOLD10GR,1,-1 },/*(11)\textbbgreek{ab}-->\alpha\beta*/
+    { "\\textbf",  CMMIB10, 1, -1 }, /*(12)\textbf{abc}-->{\mathbf~abc}+space*/
     {  NULL,	   0,       0,  0 } }
 #endif
   ; /* --- end-of-fonts[] --- */
@@ -641,6 +642,7 @@ subraster *rastnoop();			/* handle \escape's to be flushed */
 #define	ISCONTENTTYPE	(13)		/*enable/disable Content-type lines*/
 #define	ISCONTENTCACHED	(14)		/* write Content-type to cache file*/
 #define	ISPBMPGM	(15)		/* write pbm/pgm (instead of gif) */
+#define	ISUTHETA	(16)		/* 3d-rotation angle for chars */
 
 /* ---
  * mathchardefs for symbols recognized by mimetex
@@ -740,7 +742,7 @@ STATIC	mathchardef symtable[]
     { "\\mathbb",	  5,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\rm",		  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\text",		  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
-    { "\\textbf",	  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
+    { "\\textbf",	 12,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\textrm",	  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\mathrm",	  7,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\cyr",		  8,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
@@ -800,6 +802,7 @@ STATIC	mathchardef symtable[]
     { "\\aaalg",ISAAALGORITHM,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\pnmparams",PNMPARAMS,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\pbmpgm",    ISPBMPGM,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
+    { "\\utheta",    ISUTHETA,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\gammacorrection",ISGAMMA,NOVALUE,NOVALUE,(HANDLER)(rastflags) },
     { "\\nocontenttype",ISCONTENTTYPE, 0,NOVALUE, (HANDLER)(rastflags) },
     { "\\nodepth",   ISCONTENTCACHED,  0,NOVALUE, (HANDLER)(rastflags) },

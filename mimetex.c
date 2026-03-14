@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- * Copyright(c) 2002-2012, John Forkosh Associates, Inc. All rights reserved.
+ * Copyright(c) 2002-2017, John Forkosh Associates, Inc. All rights reserved.
  *           http://www.forkosh.com   mailto: john@forkosh.com
  * --------------------------------------------------------------------------
  * This file is part of mimeTeX, which is free software. You may redistribute
@@ -75,6 +75,7 @@
  *		rastcpy(rp)                           allocate new copy of rp
  *		subrastcpy(sp)                        allocate new copy of sp
  *		rastrot(rp)         new raster rotated right 90 degrees to rp
+ *		rastrot3d(rp,axis,theta)new rast rotated around axis by theta
  *		rastmag(rp,magstep)   new raster magnified by "magstep" to rp
  *		bytemapmag(bytemap,width,height,magstep)      magnify bytemap
  *		rastref(rp,axis)    new raster reflected (axis 1=horz,2=vert)
@@ -198,6 +199,8 @@
  *		urlprune(url,n)  http://abc.def.ghi.com/etc-->abc.def.ghi.com
  *		urlncmp(url1,url2,n)   compares topmost n levels of two url's
  *		dbltoa(d,npts)                double to comma-separated ascii
+ *		rotmatrix(axis,theta) rotation matrix, theta degs around axis
+ *		matmult(mat,vec)        returns result of mat(rix) x vec(tor)
  *		=== Anti-alias completed raster (lowpass) or symbols (ss) ===
  *		aalowpass(rp,bytemap,grayscale)     lowpass grayscale bytemap
  *		aapnm(rp,bytemap,grayscale)       lowpass based on pnmalias.c
@@ -394,7 +397,8 @@
  * 11/18/09	J.Forkosh	Version 1.72 released.
  * 11/15/11	J.Forkosh	Version 1.73 released.
  * 02/15/12	J.Forkosh	Version 1.74 released.
- * 09/26/12	J.Forkosh	Most recent revision (also see REVISIONDATE)
+ * 12/28/16	J.Forkosh	Version 1.75 released.
+ * 12/28/16	J.Forkosh	Most recent revision (also see REVISIONDATE)
  * See  http://www.forkosh.com/mimetexchangelog.html  for further details.
  *
  ****************************************************************************/
@@ -402,9 +406,9 @@
 /* -------------------------------------------------------------------------
 Program id
 -------------------------------------------------------------------------- */
-#define	VERSION "1.74"			/* mimeTeX version number */
-#define REVISIONDATE "26 Sept 2012"	/* date of most recent revision */
-#define COPYRIGHTTEXT "Copyright(c) 2002-2012, John Forkosh Associates, Inc"
+#define	VERSION "1.75"			/* mimeTeX version number */
+#define REVISIONDATE "28 Dec. 2016"	/* date of most recent revision */
+#define COPYRIGHTTEXT "Copyright(c) 2002-2017, John Forkosh Associates, Inc"
 
 /* -------------------------------------------------------------------------
 header files and macros
@@ -459,14 +463,14 @@ additional symbols
 /* ---
  * windows-specific header info
  * ---------------------------- */
-#ifndef WINDOWS			/* -DWINDOWS not supplied by user */
+#if !defined(WINDOWS)		/* -DWINDOWS not supplied by user */
   #if defined(_WINDOWS) || defined(_WIN32) || defined(WIN32) \
   ||  defined(DJGPP)		/* try to recognize windows compilers */ \
   ||  defined(_USRDLL)		/* must be WINDOWS if compiling for DLL */
     #define WINDOWS		/* signal windows */
   #endif
 #endif
-#ifdef WINDOWS			/* Windows opens stdout in char mode, and */
+#if defined(WINDOWS)		/* Windows opens stdout in char mode, and */
   #include <fcntl.h>		/* precedes every 0x0A with spurious 0x0D.*/
   #include <io.h>		/* So emitcache() issues a Win _setmode() */
 				/* call to put stdout in binary mode. */
@@ -491,24 +495,24 @@ additional symbols
 /* ---
  * check for supersampling or low-pass anti-aliasing
  * ------------------------------------------------- */
-#ifdef SS
+#if defined(SS)
   #define ISSUPERSAMPLING 1
-  #ifndef AAALGORITHM
+  #if !defined(AAALGORITHM)
     #define AAALGORITHM 1		/* default supersampling algorithm */
   #endif
-  #ifndef AA				/* anti-aliasing not explicitly set */
+  #if !defined(AA)			/* anti-aliasing not explicitly set */
     #define AA				/* so define it ourselves */
   #endif
-  #ifndef SSFONTS			/* need supersampling fonts */
+  #if !defined(SSFONTS)			/* need supersampling fonts */
     #define SSFONTS
   #endif
 #else
   #define ISSUPERSAMPLING 0
-  #ifndef AAALGORITHM
+  #if !defined(AAALGORITHM)
     #define AAALGORITHM 3 /*2*/		/* default lowpass algorithm */
   #endif
 #endif
-#ifndef MAXFOLLOW
+#if !defined(MAXFOLLOW)
   #define MAXFOLLOW 8			/* aafollowline() maxturn default */
 #endif
 
@@ -527,13 +531,13 @@ additional symbols
 #endif
 /* --- resolve output option inconsistencies --- */
 #if defined(XBITMAP)			/* xbitmap supercedes gif and png */
-  #ifdef AA
+  #if defined(AA)
     #undef AA
   #endif
-  #ifdef GIF
+  #if defined(GIF)
     #undef GIF
   #endif
-  #ifdef PNG
+  #if defined(PNG)
     #undef PNG
   #endif
 #endif
@@ -545,7 +549,7 @@ additional symbols
   /* --- yes, compile main() --- */
   #define DRIVER			/* main() driver will be compiled */
 #else /* --- main() won't be compiled (e.g., for gfuntype.c) --- */
-  #ifndef TEXFONTS
+  #if !defined(TEXFONTS)
     #define NOTEXFONTS			/* texfonts not required */
   #endif
 #endif
@@ -561,21 +565,21 @@ additional symbols
 /* ---
  * info needed when gif image returned in memory buffer
  * ---------------------------------------------------- */
-#ifdef GIF				/* compiling along with gifsave.c */
+#if defined(GIF)			/* compiling along with gifsave.c */
   extern int gifSize;
   extern int maxgifSize;
 #else					/* or just set dummy values */
   static int gifSize=0, maxgifSize=0;
 #endif
 /* --- gamma correction --- */
-#ifndef GAMMA
+#if !defined(GAMMA)
   #define GAMMA 1.25 /*1.75*/ /*2.2*/
 #endif
-#ifndef REVERSEGAMMA
+#if !defined(REVERSEGAMMA)
   #define REVERSEGAMMA 0.5		/* for \reverse white-on-black */
 #endif
 /* --- opaque background (default to transparent) --- */
-#ifndef OPAQUE
+#if !defined(OPAQUE)
   #define ISTRANSPARENT 1
 #else
   #define ISTRANSPARENT 0
@@ -603,28 +607,57 @@ additional symbols
   #define MAXGIFSZ 131072		/* max #bytes in output GIF image */
 #endif
 
+/* ---
+ * note: point3d.x,y,z are relative to the origin 0.,0.,0. of an abstract
+ * coordinate system, calculated to be at the center pixel of a raster.
+ * point3d and matrix3d are used for rotations, as per
+ *   https://en.wikipedia.org/wiki/Rotation_matrix#In_three_dimensions
+ * in function rotrast3d()
+ * ------------------------------------------------------------------------ */
+/* --- 3d-point --- */
+#define point3d struct point3d_struct   /* "typedef" for point3d_struct */
+point3d {
+  /* --- x,y,z-coords relative to 0.,0.,0. origin of abstract coord axes --- */
+  double x;                             /* x-coord */
+  double y;                             /* y-coord */
+  double z;                             /* z-coord */
+  } ; /* --- end-of-point3d_struct --- */
+/* --- 3d-matrix (rotation matrix) stored row-wise --- */
+#define matrix3d struct matrix3d_struct /* "typedef" for matrix3d_struct */
+matrix3d {
+  /* --- 3x3 matrix stored row-wise --- */
+  point3d xrow;                         /* x-row */
+  point3d yrow;                         /* y-row */
+  point3d zrow;                         /* z-row */
+  } ; /* --- end-of-matrix3d_struct --- */
+/* --- 3d-rotation parameters --- */
+#define	YAXIS {0.,1.,0.}		/* x-component=0, y=1, z=0 */
+#define	UTHETA 0.0			/* no rotation (in degrees) */
+GLOBAL(point3d,uaxis,YAXIS);		/* rotate around y-axis */
+GLOBAL(double,utheta,UTHETA);		/* rotation amount in degrees */
+
 /* -------------------------------------------------------------------------
 adjustable default values
 -------------------------------------------------------------------------- */
 /* ---
  * anti-aliasing parameters
  * ------------------------ */
-#ifndef	CENTERWT
+#if !defined(CENTERWT)
   /*#define CENTERWT 32*/		/* anti-aliasing centerwt default */
   /*#define CENTERWT 10*/		/* anti-aliasing centerwt default */
   #define CENTERWT 8			/* anti-aliasing centerwt default */
 #endif
-#ifndef	ADJACENTWT
+#if !defined(ADJACENTWT)
   /*#define ADJACENTWT 3*/		/* anti-aliasing adjacentwt default*/
   #define ADJACENTWT 2			/* anti-aliasing adjacentwt default*/
 #endif
-#ifndef	CORNERWT
+#if !defined(CORNERWT)
   #define CORNERWT 1			/* anti-aliasing cornerwt default*/
 #endif
-#ifndef	MINADJACENT
+#if !defined(MINADJACENT)
   #define MINADJACENT 6			/*anti-aliasing minadjacent default*/
 #endif
-#ifndef	MAXADJACENT
+#if !defined(MAXADJACENT)
   #define MAXADJACENT 8			/*anti-aliasing maxadjacent default*/
 #endif
 /* --- variables for anti-aliasing parameters --- */
@@ -665,7 +698,7 @@ STATIC int patternnumcount0[99], patternnumcount1[99], /*aalookup() counts*/
 other variables
 -------------------------------------------------------------------------- */
 /* --- black on white background (default), or white on black --- */
-#ifdef WHITE
+#if defined(WHITE)
   #define ISBLACKONWHITE 0		/* white on black background */
 #else
   #define ISBLACKONWHITE 1		/* black on white background */
@@ -674,13 +707,13 @@ other variables
 #define	BGRED   (ISBLACKONWHITE?255:0)
 #define	BGGREEN (ISBLACKONWHITE?255:0)
 #define	BGBLUE  (ISBLACKONWHITE?255:0)
-#ifndef	FGRED
+#if !defined(FGRED)
   #define FGRED   (ISBLACKONWHITE?0:255)
 #endif
-#ifndef	FGGREEN
+#if !defined(FGGREEN)
   #define FGGREEN (ISBLACKONWHITE?0:255)
 #endif
-#ifndef	FGBLUE
+#if !defined(FGBLUE)
   #define FGBLUE  (ISBLACKONWHITE?0:255)
 #endif
 /* --- advertisement
@@ -692,91 +725,91 @@ other variables
   #define HOST_SHOWAD "\000"		/* show ads on all hosts */
 #endif
 /* --- "smash" margin (0 means no smashing) --- */
-#ifndef SMASHMARGIN
-  #ifdef NOSMASH
+#if !defined(SMASHMARGIN)
+  #if defined(NOSMASH)
     #define SMASHMARGIN 0
   #else
     #define SMASHMARGIN 3
   #endif
 #endif
-#ifndef SMASHCHECK
+#if !defined(SMASHCHECK)
   #define SMASHCHECK 0
 #endif
 /* --- textwidth --- */
-#ifndef TEXTWIDTH
+#if !defined(TEXTWIDTH)
   #define TEXTWIDTH (400)
 #endif
 /* --- font "combinations" --- */
 #define	CMSYEX (109)			/*select CMSY10, CMEX10 or STMARY10*/
 /* --- prefix prepended to all expressions --- */
-#ifndef	PREFIX
+#if !defined(PREFIX)
   #define PREFIX "\000"			/* default no prepended prefix */
 #endif
 /* --- skip argv[]'s preceding ARGSIGNAL when parsing command-line args --- */
-#ifdef NOARGSIGNAL
+#if defined(NOARGSIGNAL)
   #define ARGSIGNAL NULL
 #endif
-#ifndef	ARGSIGNAL
+#if !defined(ARGSIGNAL)
   #define ARGSIGNAL "++"
 #endif
 /* --- security and logging (inhibit message logging, etc) --- */
-#ifndef	SECURITY
+#if !defined(SECURITY)
   #define SECURITY 999			/* default highest security level */
 #endif
-#ifndef	LOGFILE
+#if !defined(LOGFILE)
   #define LOGFILE "mimetex.log"		/* default log file */
 #endif
-#ifndef	CACHELOG
+#if !defined(CACHELOG)
   #define CACHELOG "mimetex.log"	/* default caching log file */
 #endif
 #if !defined(NODUMPENVP) && !defined(DUMPENVP)
   #define DUMPENVP			/* assume char *envp[] available */
 #endif
 /* --- max query_string length if no http_referer supplied --- */
-#ifndef NOREFMAXLEN
+#if !defined(NOREFMAXLEN)
   #define NOREFMAXLEN 9999		/* default to any length query */
 #endif
-#ifndef NOREFSAFELEN
+#if !defined(NOREFSAFELEN)
   #define NOREFSAFELEN 24		/* too small for hack exploit */
 #endif
 /* --- check whether or not to perform http_referer check --- */
-#ifdef REFERER				/* only specified referers allowed */
+#if defined(REFERER)			/* only specified referers allowed */
   #undef NOREFMAXLEN
   #define NOREFMAXLEN NOREFSAFELEN
 #else					/* all http_referer's allowed */
   #define REFERER NULL
 #endif
 /* --- check top levels of http_referer against server_name --- */
-#ifdef REFLEVELS			/* #topmost levels to check */
+#if defined(REFLEVELS)			/* #topmost levels to check */
   #undef NOREFMAXLEN
   #define NOREFMAXLEN NOREFSAFELEN
 #else
-  #ifdef NOREFCHECK
+  #if defined(NOREFCHECK)
     #define REFLEVELS 0			/* don't match host and referer */
   #else
     #define REFLEVELS 3			/* default matches abc.def.com */
   #endif
 #endif
 /* --- check whether or not \input, \counter, \environment permitted --- */
-#ifdef DEFAULTSECURITY			/* default security specified */
+#if defined(DEFAULTSECURITY)		/* default security specified */
   #define EXPLICITDEFSECURITY		/* don't override explicit default */
 #else					/* defualt security not specified */
   #define DEFAULTSECURITY (8)		/* so set default security level */
 #endif
-#ifdef INPUTREFERER 			/*http_referer's permitted to \input*/
-  #ifndef INPUTSECURITY			/* so we need to permit \input{} */
+#if defined(INPUTREFERER)		/*http_referer's permitted to \input*/
+  #if !defined(INPUTSECURITY)		/* so we need to permit \input{} */
     #define INPUTSECURITY (99999)	/* make sure SECURITY<INPUTSECURITY */
   #endif
 #else					/* no INPUTREFERER list supplied */
   #define INPUTREFERER NULL		/* so init it as NULL pointer */
 #endif
-#ifndef INPUTPATH 			/* \input{} paths permitted for... */
+#if !defined(INPUTPATH)			/* \input{} paths permitted for... */
   #define INPUTPATH NULL		/* ...any referer */
 #endif
-#ifndef INPUTSECURITY			/* \input{} security not specified */
-  #ifdef INPUTOK			/* but INPUTOK flag specified */
+#if !defined(INPUTSECURITY)		/* \input{} security not specified */
+  #if defined(INPUTOK)			/* but INPUTOK flag specified */
     #define INPUTSECURITY (99999)	/* so enable \input{} */
-    #ifndef EXPLICITDEFSECURITY		/* don't override explicit default */
+    #if !defined(EXPLICITDEFSECURITY)	/* don't override explicit default */
       #undef  DEFAULTSECURITY		/* but we'll override our default */
       #define DEFAULTSECURITY (99999)	/*let -DINPUTOK enable \counter,etc*/
     #endif
@@ -784,40 +817,40 @@ other variables
     #define INPUTSECURITY DEFAULTSECURITY /* set default \input security */
   #endif
 #endif
-#ifndef COUNTERSECURITY			/*\counter{} security not specified*/
-  #ifdef COUNTEROK			/* but COUNTEROK flag specified */
+#if !defined(COUNTERSECURITY)		/*\counter{} security not specified*/
+  #if defined(COUNTEROK)		/* but COUNTEROK flag specified */
     #define COUNTERSECURITY (99999)	/* so enable \counter{} */
   #else					/* else no \counter{} specified */
     #define COUNTERSECURITY DEFAULTSECURITY /*set default \counter security*/
   #endif
 #endif
-#ifndef ENVIRONSECURITY			/* \environ security not specified */
-  #ifdef ENVIRONOK			/* but ENVIRONOK flag specified */
+#if !defined(ENVIRONSECURITY)		/* \environ security not specified */
+  #if defined(ENVIRONOK)		/* but ENVIRONOK flag specified */
     #define ENVIRONSECURITY (99999)	/* so enable \environ */
   #else					/* else no \environ specified */
     #define ENVIRONSECURITY DEFAULTSECURITY /*set default \environ security*/
   #endif
 #endif
 /* --- image caching (cache images if given -DCACHEPATH=\"path\") --- */
-#ifndef CACHEPATH
+#if !defined(CACHEPATH)
   #define ISCACHING 0			/* no caching */
   #define CACHEPATH "\000"		/* same directory as mimetex.cgi */
 #else
   #define ISCACHING 1			/* caching if -DCACHEPATH="path" */
 #endif
 /* --- \input paths (prepend prefix if given -DPATHPREFIX=\"prefix\") --- */
-#ifndef PATHPREFIX
+#if !defined(PATHPREFIX)
   #define PATHPREFIX "\000"		/* paths relative mimetex.cgi */
 #endif
 /* --- time zone delta t (in hours) --- */
-#ifndef TZDELTA
+#if !defined(TZDELTA)
   #define TZDELTA 0
 #endif
 /* --- treat +'s in query string as blanks? --- */
-#ifdef PLUSBLANK			/* + always interpreted as blank */
+#if defined(PLUSBLANK)			/* + always interpreted as blank */
   #define ISPLUSBLANK 1
 #else
-  #ifdef PLUSNOTBLANK			/* + never interpreted as blank */
+  #if defined(PLUSNOTBLANK)		/* + never interpreted as blank */
     #define ISPLUSBLANK 0
   #else					/* program tries to determine */
     #define ISPLUSBLANK (-1)
@@ -828,15 +861,15 @@ other variables
 debugging and logging / error reporting
 -------------------------------------------------------------------------- */
 /* --- debugging and error reporting --- */
-#ifndef	MSGLEVEL
+#if !defined(MSGLEVEL)
   #define MSGLEVEL 1
 #endif
 #define	DBGLEVEL 9			/* debugging if msglevel>=DBGLEVEL */
 #define	LOGLEVEL 3			/* logging if msglevel>=LOGLEVEL */
-#ifndef FORMLEVEL
+#if !defined(FORMLEVEL)
   #define FORMLEVEL LOGLEVEL		/*msglevel if called from html form*/
 #endif
-#ifndef	ERRORSTATUS			/* exit(ERRORSTATUS) for any error */
+#if !defined(ERRORSTATUS)		/* exit(ERRORSTATUS) for any error */
   #define ERRORSTATUS 0			/* default doesn't signal errors */
 #endif
 GLOBAL(int,seclevel,SECURITY);		/* security level */
@@ -848,10 +881,10 @@ GLOBAL(int,errorstatus,ERRORSTATUS);	/* exit status if error encountered*/
 GLOBAL(int,exitstatus,0);		/* exit status (0=success) */
 STATIC	FILE *msgfp;			/* output in command-line mode */
 /* --- embed warnings in rendered expressions, [\xxx?] if \xxx unknown --- */
-#ifdef WARNINGS
+#if defined(WARNINGS)
   #define WARNINGLEVEL WARNINGS
 #else
-  #ifdef NOWARNINGS
+  #if defined(NOWARNINGS)
     #define WARNINGLEVEL 0
   #else
     #define WARNINGLEVEL 1
@@ -1068,7 +1101,7 @@ if ( pixmap == (pixbyte *)NULL )	/* malloc failed */
     rp = (raster *)NULL;		/* reset pointer */
     goto end_of_job; }			/* and return error to caller */
 memset((void *)pixmap,filler,nbytes);	/* init bytes to binary 0's or ' 's*/
-*pixmap = (pixbyte)0;			/* and first byte alwasy 0 */
+*pixmap = (pixbyte)0;			/* and first byte always 0 */
 rp->pixmap = pixmap;			/* store ptr to malloced memory */
 /* -------------------------------------------------------------------------
 Back to caller with address of raster struct, or NULL ptr for any error.
@@ -1293,7 +1326,7 @@ int	height= (rp==NULL?0:rp->height), /* original and copied height */
 	pixsz = (rp==NULL?0:rp->pixsz),	/* #bits per pixel */
 	nbytes= (rp==NULL?0:(pixmapsz(rp))); /* #bytes in rp's pixmap */
 /* -------------------------------------------------------------------------
-allocate rotated raster and fill it
+allocate copied raster and fill it
 -------------------------------------------------------------------------- */
 /* --- allocate copied raster with same width,height, and copy bitmap --- */
 if ( rp != NULL )			/* nothing to copy if ptr null */
@@ -1390,6 +1423,78 @@ if ( (rotated = new_raster(height,width,pixsz)) /* flip width,height */
 	setpixel(rotated,icol,(height-1-irow),value); }
 return ( rotated );			/* return rotated raster to caller */
 } /* --- end-of-function rastrot() --- */
+
+
+/* ==========================================================================
+ * Function:	rastrot3d ( rp, axis, theta )
+ * Purpose:	rotates rp around 3d-axis by theta, projecting back onto
+ *		x,y-plane
+ * --------------------------------------------------------------------------
+ * Arguments:	rp (I)		ptr to raster struct with image to be rotated
+ *		axis (I)	point3d * specifying rotation axis
+ *		theta (I)	double specifying rotation in degrees
+ * --------------------------------------------------------------------------
+ * Returns:	( raster * )	ptr to new raster struct with rotated image,
+ *				or NULL for any error.
+ * --------------------------------------------------------------------------
+ * Notes:     o
+ * ======================================================================= */
+/* --- entry point --- */
+raster	*rastrot3d ( raster *rp, point3d *axis, double theta )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+raster	*new_raster(), *rotp = NULL;	/* rotated raster back to caller */
+int	width = rp->width,  icol = 0,	/* raster width,  column index */
+ 	height= rp->height, irow = 0,	/* raster height, row index */
+	pixsz = rp->pixsz;		/* #bits per pixel */
+double	midcol = ((double)(width))/2.0,	/* x-origin index coord */
+	midrow = ((double)(height))/2.0; /* y-origin index coord */
+int	bgpixel = 0;			/* background pixel value */
+matrix3d *rotmatrix(), *rotmat=NULL;	/* rotation matrix */
+point3d	*matmult();			/* matrix multiplication */
+/* -------------------------------------------------------------------------
+Initialization
+-------------------------------------------------------------------------- */
+/* --- check input --- */
+if ( rp == NULL ) goto end_of_job;	/* error if no input raster supplied */
+/* --- get rotation matrix --- */
+if ( (rotmat = rotmatrix(axis,theta))	/*rotate around axis by theta degrees*/
+==   NULL ) goto end_of_job;		/*some problem, likely 0-length axis*/
+/* --- allocate rotated raster (with same width,height) --- */
+if ( (rotp = new_raster(width,height,pixsz)) /* (same width,height) */
+==   NULL ) goto end_of_job;		/* quit if allocation failed */
+/* -------------------------------------------------------------------------
+rotate pixel-by-pixel
+-------------------------------------------------------------------------- */
+for ( irow=0; irow<height; irow++ ) {
+  double y = ((double)irow) - midrow;	/* y-coord relative to grid center */
+  for ( icol=0; icol<width; icol++ ) {
+    int pixval = getpixel(rp,irow,icol); /* pixel value */
+    double x = ((double)icol) - midcol; /* x-coord relative to grid center */
+    point3d u={x,y,0.}, *urot=NULL;	/* original, rotated coords */
+    /* ---
+     * rotate pixel
+     * --------------- */
+    if ( pixval != bgpixel )		/* if not a background pixel */ 
+      if ( (urot = matmult(rotmat,&u)) /* apply rotation matrix */
+      !=   NULL ) {			/* succeeded */
+        double dy=(+0.00), dx=(-0.25);	/*ad hoc rounding determined by tests*/
+        int jrow = (int)(urot->y + midrow + dy); /* rotated row */
+        int jcol = (int)(urot->x + midcol + dx); /* rotated col */
+        if ( jrow>=0 && jrow<height	/* check rotated pixel coords */
+        &&   jcol>=0 && jcol<width )	/* rotated pixel in bounds */
+          setpixel(rotp,jrow,jcol,pixval); /* rotated pixel in place */
+        } /* --- end-of-if(urot!=NULL) --- */
+    } /* --- end-of-for(icol) --- */
+  } /* --- end-of-for(irow) --- */
+/* ---
+ * end-of-job
+ * ------------- */
+end_of_job:
+  return ( rotp );			/* return rotated raster to caller */
+} /* --- end-of-function rastrot3d() --- */
 
 
 /* ==========================================================================
@@ -4491,7 +4596,9 @@ chardef	*get_chardef(), *gfdata=NULL;	/* chardef struct for symdef,size */
 int	get_baseline();			/* baseline of gfdata */
 subraster *new_subraster(), *sp=NULL;	/* subraster containing gfdata */
 raster	*bitmaprp=NULL, *gftobitmap();	/* convert .gf-format to bitmap */
+raster	*rotp=NULL, *rastrot3d();	/* rotate character if utheta>0 */
 int	delete_subraster();		/* in case gftobitmap() fails */
+int	delete_raster();		/* in case IMAGERASTER replaced */
 int	aasupsamp(),			/*antialias char with supersampling*/
 	grayscale=256;			/* aasupersamp() parameters */
 /* -------------------------------------------------------------------------
@@ -4533,6 +4640,13 @@ if ( (gfdata=get_chardef(symdef,size))	/* look up chardef for symdef,size */
 	  sp->baseline /= shrinkfactor;	/* rescale baseline */
 	sp->type = IMAGERASTER; }	/* character is an image raster */
     } /* --- end-of-if(issupersampling) --- */
+  if ( absval(utheta) > 1.0e-6 ) {	/* character 3d-rotation wanted */
+    rotp = rastrot3d(sp->image,&uaxis,utheta); /* rotate image around uaxis */
+    if ( sp->type != CHARASTER )	/* not a static character raster */
+      delete_raster(sp->image);		/* so free currently allocated image */
+    sp->image = rotp;			/* and replace it with rotated image */
+    sp->type = IMAGERASTER;		/* allocated raster will be freed */
+    } /* --- end-of-if(absval(utheta)>1.0e-6) --- */
   } /* --- end-of-if(sp!=NULL) --- */
 end_of_job:
  if ( msgfp!=NULL && msglevel>=999 )
@@ -8386,6 +8500,7 @@ switch ( flag )
   case ISSMASH:				/* set (minimum) "smash" margin */
   case ISGAMMA:				/* set gamma correction */
   case ISPBMPGM:			/* set pbmpgm output flag and ptype*/
+  case ISUTHETA:			/* set utheta 3d-rotation angle */
     if ( value != NOVALUE )		/* passed a fixed value to be set */
       {	argvalue = value;		/* set given fixed int value */
 	dblvalue = (double)value; }	/* or maybe interpreted as double */
@@ -8400,6 +8515,7 @@ switch ( flag )
 	     switch ( flag ) {		/* convert to double or int */
 	      default: argvalue = atoi(valuearg); break; /* convert to int */
 	      case ISGAMMA:
+	      case ISUTHETA:
 		dblvalue = strtod(valuearg,NULL); break; } /* or to double */
 	   } /* --- end-of-if(*valuearg!='?') --- */
       } /* --- end-of-if(value==NOVALUE) --- */
@@ -8518,6 +8634,10 @@ switch ( flag )
       case ISGAMMA:			/* set gamma correction */
 	if ( dblvalue >= 0.0 )		/* got a value */
 	  gammacorrection = dblvalue;	/* set gamma correction */
+	break;
+      case ISUTHETA:			/* set 3d-rotation angle for chars */
+	if ( absval(dblvalue) >= 1.0e-6 ) /* got a value */
+	  utheta = dblvalue;		/* set utheta */
 	break;
       } /* --- end-of-switch() --- */
     break;
@@ -13352,6 +13472,108 @@ if ( isneg ) *finptr++ = ')';		/*trailing paren for negative value*/
 *finptr = '\000';			/* null-terminate converted double */
 return ( finval );			/* converted double back to caller */
 } /* --- end-of-function dbltoa() --- */
+
+
+/* ==========================================================================
+ * Function:	rotmatrix ( axis, theta )
+ *		Constructs rotation matrix for theta degrees around axis
+ *		(see Notes below for discussion).
+ * --------------------------------------------------------------------------
+ * Arguments:	axis (I)	point3d * to u=(u_x,u_y,u_z) components
+ *				of rotation axis (u's tail point at origin),
+ *				or NULL ptr returns previous matrix
+ *		theta (I)	double containing rotation in degrees
+ *				(positive theta rotation according to
+ *				right-hand screw rule),
+ *				or 0.0 returns previous matrix
+ * --------------------------------------------------------------------------
+ * Returns:	( matrix3d * )	pointer to constructed rotation matrix,
+ *				or NULL for any error
+ * --------------------------------------------------------------------------
+ * Notes:     o	For discussion, see
+ *		http://wikipedia.org/wiki/Rotation_matrix#In_three_dimensions
+ *		
+ * ======================================================================= */
+/* --- entry point --- */
+matrix3d *rotmatrix ( point3d *axis, double theta )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+static	matrix3d rot =			/* returned rotation matrix */
+	{ {0.,0.,0,}, {0.,0.,0,}, {0.,0.,0,} }; /* just init as zero's */
+matrix3d *prot = &(rot);		/* init returned rot ptr */
+double	pi = 3.14159265359;		/* pi */
+double	u,ux,uy,uz,			/* axis length and components */
+	tsin,tcos;			/* sin,cos (theta) */
+/* -------------------------------------------------------------------------
+Initialization
+-------------------------------------------------------------------------- */
+if ( axis == NULL			/*  no rotation axis, or no theta */
+||   absval(theta) < 1.0e-10 ) goto end_of_job;/*just return preceding matrix*/
+if ( 1 ) theta *= (pi/180.);		/*convert theta in degrees to radians*/
+tsin = sin(theta);  tcos = cos(theta);	/* sin,cos (theta) */
+ux = axis->x;  uy = axis->y;  uz = axis->z; /* unnormalized axis components */
+u = sqrt((ux*ux)+(uy*uy)+(uz*uz));	/* axis length */
+if ( u < 1.0e-10 ) goto end_of_job;	/* zero-vector is an error */
+ux /= u;  uy /= u;  uz /= u;		/* normalized axis components */
+/* -------------------------------------------------------------------------
+rotation matrix components, stored row-wise
+-------------------------------------------------------------------------- */
+/* --- x-row --- */
+rot.xrow.x = tcos + ux*ux*(1.0-tcos);
+rot.xrow.y =        ux*uy*(1.0-tcos) - uz*tsin;
+rot.xrow.z =        ux*uz*(1.0-tcos) + uy*tsin;
+/* --- y-row --- */
+rot.yrow.x =        uy*ux*(1.0-tcos) + uz*tsin;
+rot.yrow.y = tcos + uy*uy*(1.0-tcos);
+rot.yrow.z =        uy*uz*(1.0-tcos) - ux*tsin;
+/* --- z-row --- */
+rot.zrow.x =        uz*ux*(1.0-tcos) - uy*tsin;
+rot.zrow.y =        uz*uy*(1.0-tcos) + ux*tsin;
+rot.zrow.z = tcos + uz*uz*(1.0-tcos);
+prot = &(rot);				/* point return value to matrix */
+end_of_job:
+  return ( prot );			/*back to caller with rotation matrix*/
+} /* --- end-of-function rotmatrix() --- */
+
+
+/* ==========================================================================
+ * Function:	matmult ( mat, vec )
+ *		returns result of mat(rix) x vec(tor)
+ * --------------------------------------------------------------------------
+ * Arguments:	mat (I)		matrix3d * to matrix
+ *		vec (I)		point3d *  to vector
+ * --------------------------------------------------------------------------
+ * Returns:	( point3d * )	pointer to result of mat(rix) x vec(tor),
+ *				or NULL for any error
+ * --------------------------------------------------------------------------
+ * Notes:     o
+ * ======================================================================= */
+/* --- entry point --- */
+point3d	*matmult ( matrix3d *mat, point3d *vec )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+static	point3d mult;			/* returned matrix x vector product */
+point3d *pmult = NULL;			/* init mult ptr for error */
+/* -------------------------------------------------------------------------
+Initialization
+-------------------------------------------------------------------------- */
+if ( mat == NULL			/* mat and vec required input */
+||   vec == NULL ) goto end_of_job;	/* missing required input */
+/* -------------------------------------------------------------------------
+matrix multiplication
+-------------------------------------------------------------------------- */
+/* --- x,y,z-components of mat(rix) x vec(tor) product --- */
+mult.x = (mat->xrow.x)*vec->x + (mat->xrow.y)*vec->y + (mat->xrow.z)*vec->z;
+mult.y = (mat->yrow.x)*vec->x + (mat->yrow.y)*vec->y + (mat->yrow.z)*vec->z;
+mult.z = (mat->zrow.x)*vec->x + (mat->zrow.y)*vec->y + (mat->zrow.z)*vec->z;
+pmult = &(mult);			/* point return value to product */
+end_of_job:
+  return ( pmult );			/*back to caller with matrix x vector*/
+} /* --- end-of-function matmult() --- */
 
 
 /* ==========================================================================
