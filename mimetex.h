@@ -561,10 +561,12 @@ subraster *rastcircle();		/* handle \circle(xdiam[,ydiam]) */
 subraster *rastbezier();		/*handle\bezier(c0,r0)(c1,r1)(ct,rt)*/
 subraster *rastraise();			/* handle \raisebox{lift}{expr} */
 subraster *rastrotate();		/* handle \rotatebox{degs}{expr} */
+subraster *rastmagnify();		/* handle \magnify{magstep}{expr} */
 subraster *rastreflect();		/* handle \reflectbox[axis]{expr} */
 subraster *rastfbox();			/* handle \fbox{expr} */
 subraster *rastinput();			/* handle \input{filename} */
 subraster *rastcounter();		/* handle \counter{filename} */
+subraster *rasteval();			/* handle \eval{expression} */
 subraster *rasttoday();			/* handle \today[+/-tzdelta,ifmt] */
 subraster *rastcalendar();		/* handle \calendar[yaer,month] */
 subraster *rastenviron();		/* handle \environment */
@@ -588,6 +590,7 @@ subraster *rastnoop();			/* handle \escape's to be flushed */
 #define	ISDISPLAYSTYLE	(2)		/* set isdisplaystyle */
 #define	ISDISPLAYSIZE	(21)		/* set displaysize */
 #define	ISFONTSIZE	(3)		/* set fontsize */
+#define	ISMAGSTEP	(31)		/* set magstep */
 #define	ISWEIGHT	(4)		/* set aa params */
 #define	ISOPAQUE	(5)		/* set background opaque */
 #define	ISSUPER		(6)		/* set supersampling/lowpass */
@@ -647,9 +650,13 @@ STATIC	mathchardef symtable[]
     { "\\qbezier",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastbezier) },
     { "\\raisebox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastraise) },
     { "\\rotatebox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastrotate) },
+    { "\\magnify",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastmagnify) },
+    { "\\magbox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastmagnify) },
     { "\\reflectbox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastreflect) },
     { "\\fbox", NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastfbox) },
+    { "\\boxed",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastfbox) },
     { "\\input",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastinput) },
+    { "\\evaluate",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rasteval) },
     { "\\today",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rasttoday) },
     { "\\calendar",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastcalendar) },
     { "\\environment",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastenviron) },
@@ -742,6 +749,7 @@ STATIC	mathchardef symtable[]
     { "\\HUGE",      ISFONTSIZE,       7,NOVALUE, (HANDLER)(rastflags) },
     { "\\fontsize",  ISFONTSIZE, NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\fs",        ISFONTSIZE, NOVALUE,NOVALUE, (HANDLER)(rastflags) },
+    { "\\magstep",   ISMAGSTEP,  NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\shrinkfactor",ISSHRINK, NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\sf",        ISSHRINK,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\light",     ISWEIGHT,         0,NOVALUE, (HANDLER)(rastflags) },
@@ -778,8 +786,22 @@ STATIC	mathchardef symtable[]
     { "\\black",     ISCOLOR,          0,NOVALUE, (HANDLER)(rastflags) },
     { "\\white",     ISCOLOR,          7,NOVALUE, (HANDLER)(rastflags) },
     /* --- accents --- */
-    { "\\vec",	VECACCENT,    1,      0,  (HANDLER)(rastaccent) },
-    { "\\widevec", VECACCENT, 1,      0,  (HANDLER)(rastaccent) },
+    { "\\vec",	VECACCENT,    1,      1,  (HANDLER)(rastaccent) },
+    { "\\widevec", VECACCENT, 1,      1,  (HANDLER)(rastaccent) },
+    { "\\overarrow",      VECACCENT,1,1,  (HANDLER)(rastaccent) },
+    { "\\overrightarrow", VECACCENT,1,1,  (HANDLER)(rastaccent) },
+    { "\\Overrightarrow", VECACCENT,1,11, (HANDLER)(rastaccent) },
+    { "\\underarrow",     VECACCENT,0,1,  (HANDLER)(rastaccent) },
+    { "\\underrightarrow",VECACCENT,0,1,  (HANDLER)(rastaccent) },
+    { "\\Underrightarrow",VECACCENT,0,11, (HANDLER)(rastaccent) },
+    { "\\overleftarrow",  VECACCENT,1,-1, (HANDLER)(rastaccent) },
+    { "\\Overleftarrow",  VECACCENT,1, 9, (HANDLER)(rastaccent) },
+    { "\\underleftarrow", VECACCENT,0,-1, (HANDLER)(rastaccent) },
+    { "\\Underleftarrow", VECACCENT,0, 9, (HANDLER)(rastaccent) },
+    { "\\overleftrightarrow", VECACCENT,1, 0,(HANDLER)(rastaccent) },
+    { "\\Overleftrightarrow", VECACCENT,1,10,(HANDLER)(rastaccent) },
+    { "\\underleftrightarrow",VECACCENT,0, 0,(HANDLER)(rastaccent) },
+    { "\\Underleftrightarrow",VECACCENT,0,10,(HANDLER)(rastaccent) },
     { "\\bar",	BARACCENT,    1,      0,  (HANDLER)(rastaccent) },
     { "\\widebar", BARACCENT, 1,      0,  (HANDLER)(rastaccent) },
     { "\\hat",	HATACCENT,    1,      0,  (HANDLER)(rastaccent) },
@@ -1377,7 +1399,9 @@ STATIC	mathchardef symtable[]
     { "+",		43,	CMR10,   BINARYOP,	NULL },
     { "/",		47,	CMR10,   BINARYOP,	NULL },
     { ":",		58,	CMR10,   ORDINARY,	NULL },
+    { "\\colon",	58,	CMR10,   OPERATOR,	NULL },
     { ";",		59,	CMR10,   ORDINARY,	NULL },
+    { "\\semicolon",	59,	CMR10,   ORDINARY,	NULL },
     { "=",		61,	CMR10,   RELATION,	NULL },
     { "?",		63,	CMR10,   BINARYOP,	NULL },
     { "@",		64,	CMR10,   BINARYOP,	NULL },
