@@ -177,6 +177,7 @@
  *		rastmagnify(expression,size,basesp,arg1,arg2,arg3)   \magnify
  *		rastreflect(expression,size,basesp,arg1,arg2,arg3)\reflectbox
  *		rastfbox(expression,size,basesp,arg1,arg2,arg3)         \fbox
+ *		rastovalbox(expression,size,basesp,arg1,arg2,arg3)   \ovalbox
  *		rastinput(expression,size,basesp,arg1,arg2,arg3)       \input
  *		rastcounter(expression,size,basesp,arg1,arg2,arg3)   \counter
  *		rasteval(expression,size,basesp,arg1,arg2,arg3)         \eval
@@ -398,7 +399,7 @@
  * 11/15/11	J.Forkosh	Version 1.73 released.
  * 02/15/12	J.Forkosh	Version 1.74 released.
  * 12/28/16	J.Forkosh	Version 1.75 released.
- * 12/28/16	J.Forkosh	Most recent revision (also see REVISIONDATE)
+ * 02/18/17	J.Forkosh	Most recent revision (also see REVISIONDATE)
  * See  http://www.forkosh.com/mimetexchangelog.html  for further details.
  *
  ****************************************************************************/
@@ -407,7 +408,7 @@
 Program id
 -------------------------------------------------------------------------- */
 #define	VERSION "1.75"			/* mimeTeX version number */
-#define REVISIONDATE "28 Dec. 2016"	/* date of most recent revision */
+#define REVISIONDATE "18 Feb. 2017"	/* date of most recent revision */
 #define COPYRIGHTTEXT "Copyright(c) 2002-2017, John Forkosh Associates, Inc"
 
 /* -------------------------------------------------------------------------
@@ -11758,6 +11759,103 @@ else
 end_of_job:
   return ( framesp );			/* return framed subexpr to caller */
 } /* --- end-of-function rastfbox() --- */
+
+
+/* ==========================================================================
+ * Function:	rastovalbox ( expression, size, basesp, arg1, arg2, arg3 )
+ * Purpose:	\ovalbox{subexpression} handler, returns subraster
+ *		containing subexpression with ellipse drawn around it
+ * --------------------------------------------------------------------------
+ * Arguments:	expression (I/O) char **  to first char of null-terminated
+ *				string immediately following \ovalbox to be
+ *				rasterized, and returning ptr immediately
+ *				following last character processed.
+ *		size (I)	int containing 0-7 default font size
+ *		basesp (I)	subraster *  to character (or subexpression)
+ *				immediately preceding \ovalbox
+ *				(unused, but passed for consistency)
+ *		arg1 (I)	int unused
+ *		arg2 (I)	int unused
+ *		arg3 (I)	int unused
+ * --------------------------------------------------------------------------
+ * Returns:	( subraster * )	ptr to subraster corresponding to \ovalbox
+ *				requested, or NULL for any parsing error
+ * --------------------------------------------------------------------------
+ * Notes:     o	Summary of syntax...
+ *		  \ovalbox[n]{subexpression}
+ *	      o	Originally copied from rastfbox(), above,
+ *		but I've removed the [][] optional argument parsing
+ *	      o Thanks to answers from Jean-Marie Becker and "Narasimham" at
+ *		   http://math.stackexchange.com/questions/2149677/
+ *		for providing info about ellipse circumscribing a rectangle
+ * ======================================================================= */
+/* --- entry point --- */
+subraster *rastovalbox ( char **expression, int size, subraster *basesp,
+			int arg1, int arg2, int arg3 )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+char	*texsubexpr(), subexpr[MAXSUBXSZ+1], narg[512], /* args */
+	composexpr[MAXSUBXSZ+128];	/* compose subexpr[] with ellipse */
+subraster *rasterize(), *framesp=NULL;	/* rasterize subexpr to be framed */
+int	delete_subraster();		/* just need width,height */
+int	fwidth = 3+size/999;		/* extra frame width */
+int	width=(-1), height=(-1),	/* width,height of subexpr[] */
+	origheight = (-1),		/* original subexpr[] height */
+	baseline = (-1);		/* and its original baseline */
+/*double sqrt2 = 1.414213562;*/		/*you think that's accurate enough?*/
+double	x0=0.0, y0=0.0,			/*rectangle half-width, half-height*/
+	a=0.0,  b=0.0;			/*ellipse semi-major, semi-minor axis*/
+double	n = 2.0;			/*width/height=(semi-major/minor)^n*/
+/* -------------------------------------------------------------------------
+obtain {subexpr} argument
+-------------------------------------------------------------------------- */
+/* --- first check for optional \ovalbox[n] and bump expression past it--- */
+if ( *(*expression) == '[' ) {		/* check for []-enclosed n arg */
+  *expression = texsubexpr(*expression,narg,511,"[","]",0,0);
+  if ( !isempty(narg) )			/* got n */
+    if ( (n = atof(narg))		/* convert to double */
+    <=   .001 ) n = 2.0;		/* sanity check (revert to default) */
+  } /* --- end-of-if(**expression=='[') --- */
+/* --- parse for {subexpr} arg, and bump expression past it --- */
+*expression = texsubexpr(*expression,subexpr,0,"{","}",0,0);
+/* -------------------------------------------------------------------------
+rasterize subexpression to be ellipse-framed
+-------------------------------------------------------------------------- */
+if ( (framesp = rasterize(subexpr,size)) /* rasterize subexpression */
+==   NULL ) goto end_of_job;		/* and quit if failed */
+if ( framesp->image == NULL ) goto end_of_job; /* or quit if no image */
+/* --- pull out info we need --- */
+width  = (framesp->image)->width;	/* width  of subexpr image */
+height = (framesp->image)->height;	/* height of subexpr image */
+baseline = framesp->baseline;		/* and original baseline */
+delete_subraster(framesp);		/* just needed width,height,baseline */
+origheight = height;			/* original "rectangle" height */
+/* --- old formulas for circumscribing ellipse (corresponds to n=1) --- */
+/*width  = (int)(0.5+sqrt2*(double)(width +fwidth));*/ /*major ellipse axis*/
+/*height = (int)(0.5+sqrt2*(double)(height+fwidth));*/ /*minor ellipse axis*/
+/* --- use general formulas for circumscribing ellipse --- */
+x0 = ((double)width)/2.0;  y0 = ((double)height)/2.0; /* half-width,height */
+a = sqrt(x0*x0 + pow(x0,2.0/n)*pow(y0,2.0-2.0/n));
+b = sqrt(y0*y0 + pow(y0,2.0/n)*pow(x0,2.0-2.0/n));
+width  = (int)(2.0*a + 0.5) + fwidth;
+height = (int)(2.0*b + 0.5) + fwidth;
+baseline += ((height-origheight)+1)/2;	/* baseline of subexpr[] chars */
+/* -------------------------------------------------------------------------
+compose with circumscribed ellipse, reset params, and return it to caller
+-------------------------------------------------------------------------- */
+/* --- construct expression to be rasterized
+       (note: too bad we have to re-rasterize original subexpr[]) --- */
+sprintf(composexpr,"\\compose{\\circle(%d,%d)}{%.8000s}",
+        width,height,subexpr);
+if ( (framesp = rasterize(composexpr,size)) /*rasterize ellipse with subexpr*/
+==   NULL ) goto end_of_job;		/* and quit if failed */
+framesp->baseline = baseline;		/* reset baseline (I hope) */
+/* --- return ellipse-framed subexpr to caller --- */
+end_of_job:
+  return ( framesp );			/* return framed subexpr to caller */
+} /* --- end-of-function rastovalbox() --- */
 
 
 /* ==========================================================================

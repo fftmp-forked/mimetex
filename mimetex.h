@@ -597,6 +597,7 @@ subraster *rastrotate();		/* handle \rotatebox{degs}{expr} */
 subraster *rastmagnify();		/* handle \magnify{magstep}{expr} */
 subraster *rastreflect();		/* handle \reflectbox[axis]{expr} */
 subraster *rastfbox();			/* handle \fbox{expr} */
+subraster *rastovalbox();		/* handle \ovalbox{expr} */
 subraster *rastinput();			/* handle \input{filename} */
 subraster *rastcounter();		/* handle \counter{filename} */
 subraster *rasteval();			/* handle \eval{expression} */
@@ -678,6 +679,7 @@ STATIC	mathchardef symtable[]
     { "\\array",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastarray) },
     { "\\matrix",NOVALUE,NOVALUE,NOVALUE, (HANDLER)(rastarray) },
     { "\\tabular",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastarray) },
+    { "\\center",NOVALUE,NOVALUE,NOVALUE, (HANDLER)(rastarray) },
     { "\\picture",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastpicture) },
     { "\\line", NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastline) },
     { "\\rule", NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastrule) },
@@ -691,6 +693,7 @@ STATIC	mathchardef symtable[]
     { "\\reflectbox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastreflect) },
     { "\\fbox", NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastfbox) },
     { "\\boxed",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastfbox) },
+    { "\\ovalbox", NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastovalbox) },
     { "\\input",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastinput) },
     { "\\evaluate",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rasteval) },
     { "\\today",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rasttoday) },
