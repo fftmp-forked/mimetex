@@ -2,22 +2,24 @@
 #define	_MIMETEX
 /****************************************************************************
  *
- * Copyright(c) 2002-2003, John Forkosh Associates, Inc. All rights reserved.
+ * Copyright(c) 2002-2008, John Forkosh Associates, Inc. All rights reserved.
+ *           http://www.forkosh.com   mailto: john@forkosh.com
  * --------------------------------------------------------------------------
  * This file is part of mimeTeX, which is free software. You may redistribute
  * and/or modify it under the terms of the GNU General Public License,
- * version 2 or later, as published by the Free Software Foundation.
+ * version 3 or later, as published by the Free Software Foundation.
  *      MimeTeX is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY, not even the implied warranty of MERCHANTABILITY.
  * See the GNU General Public License for specific details.
  *      By using mimeTeX, you warrant that you have read, understood and
- * agreed to these terms and conditions, and that you are at least 18 years
- * of age and possess the legal right and ability to enter into this
- * agreement and to use mimeTeX in accordance with it.
- *      Your mimeTeX distribution should contain a copy of the GNU General
- * Public License.  If not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA,
- * or point your browser to  http://www.gnu.org/licenses/gpl.html
+ * agreed to these terms and conditions, and that you possess the legal
+ * right and ability to enter into this agreement and to use mimeTeX
+ * in accordance with it.
+ *      Your mimetex.zip distribution file should contain the file COPYING,
+ * an ascii text copy of the GNU General Public License, version 3.
+ * If not, point your browser to  http://www.gnu.org/licenses/
+ * or write to the Free Software Foundation, Inc.,
+ * 59 Temple Place, Suite 330,  Boston, MA 02111-1307 USA.
  * --------------------------------------------------------------------------
  *
  * Purpose:	Structures, macros, symbols,
@@ -35,7 +37,9 @@
  * Revision History:
  * 09/18/02	J.Forkosh	Installation.
  * 12/11/02	J.Forkosh	Version 1.00 released.
- * 07/06/03	J.Forkosh	Version 1.10 begun.
+ * 07/04/03	J.Forkosh	Version 1.01 released.
+ * ---
+ * 09/06/08	J.Forkosh	Version 1.70 released.
  *
  ***************************************************************************/
 
@@ -74,6 +78,17 @@ check for compilation by parts (not supported yet)
   /* #define SHARED(type,variable,value) STATIC type variable */
 #endif
 
+
+/* -------------------------------------------------------------------------
+miscellaneous macros
+-------------------------------------------------------------------------- */
+#define	max2(x,y)  ((x)>(y)? (x):(y))	/* larger of 2 arguments */
+#define	min2(x,y)  ((x)<(y)? (x):(y))	/* smaller of 2 arguments */
+#define	max3(x,y,z) max2(max2(x,y),(z))	/* largest of 3 arguments */
+#define	min3(x,y,z) min2(min2(x,y),(z))	/* smallest of 3 arguments */
+#define absval(x)  ((x)>=0?(x):(-(x)))	/* absolute value */
+#define	iround(x)  ((int)((x)>=0?(x)+0.5:(x)-0.5)) /* round double to int */
+#define	dmod(x,y)  ((x)-((y)*((double)((int)((x)/(y)))))) /*x%y for doubles*/
 
 /* --------------------------------------------------------------------------
 macros to get/set/unset a single bit (in rasters), and some bitfield macros
@@ -331,7 +346,11 @@ STATIC	struct {char *name; int family; int istext; int class;}
 aspect ratio is width/height of the displayed image of a pixel
 -------------------------------------------------------------- */
 #define	ASPECTRATIO	1.0 /*(16.0/9.0)*/
-#define	SQRTWIDTH(sqrtht) ((int)(.5*((double)(sqrtht+1))*ASPECTRATIO + 0.5))
+#define SURDSERIFWIDTH(sqrtht) max2(1, ( 1 + (((sqrtht)+8)/20) ) )
+#define	SURDWIDTH(sqrtht,x) ( SURDSERIFWIDTH((sqrtht)) + \
+		(((sqrtht)+1)*ASPECTRATIO + 1) / ((((sqrtht))/20)+(x))  )
+		/* ((int)(.5*((double)((sqrtht)+1))*ASPECTRATIO + 0.5)) ) */
+#define	SQRTWIDTH(sqrtht,x) min2(32,max2(10,SURDWIDTH((sqrtht),(x))))
 
 /* ---
  * space between adjacent symbols, e.g., symspace[RELATION][VARIABLE]
@@ -536,6 +555,8 @@ subraster *rastinput();			/* handle \input{filename} */
 subraster *rastcounter();		/* handle \counter{filename} */
 subraster *rasttoday();			/* handle \today[+/-tzdelta,ifmt] */
 subraster *rastcalendar();		/* handle \calendar[yaer,month] */
+subraster *rastenviron();		/* handle \environment */
+subraster *rastmessage();		/* handle \message */
 subraster *rastnoop();			/* handle \escape's to be flushed */
 
 /* --- sqrt --- */
@@ -619,6 +640,8 @@ STATIC	mathchardef symtable[]
     { "\\input",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastinput) },
     { "\\today",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rasttoday) },
     { "\\calendar",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastcalendar) },
+    { "\\environment",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastenviron) },
+    { "\\message",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastmessage) },
     { "\\counter",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastcounter) },
     /* --- spaces --- */
     { "\\/",	1,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },

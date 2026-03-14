@@ -2,22 +2,24 @@
 #define _TEXFONTS
 /****************************************************************************
  *
- * Copyright(c) 2002-2003, John Forkosh Associates, Inc. All rights reserved.
+ * Copyright(c) 2002-2008, John Forkosh Associates, Inc. All rights reserved.
+ *           http://www.forkosh.com   mailto: john@forkosh.com
  * --------------------------------------------------------------------------
  * This file is part of mimeTeX, which is free software. You may redistribute
  * and/or modify it under the terms of the GNU General Public License,
- * version 2 or later, as published by the Free Software Foundation.
+ * version 3 or later, as published by the Free Software Foundation.
  *      MimeTeX is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY, not even the implied warranty of MERCHANTABILITY.
  * See the GNU General Public License for specific details.
  *      By using mimeTeX, you warrant that you have read, understood and
- * agreed to these terms and conditions, and that you are at least 18 years
- * of age and possess the legal right and ability to enter into this
- * agreement and to use mimeTeX in accordance with it.
- *      Your mimeTeX distribution should contain a copy of the GNU General
- * Public License.  If not, write to the Free Software Foundation, Inc.,
- * 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA,
- * or point your browser to  http://www.gnu.org/licenses/gpl.html
+ * agreed to these terms and conditions, and that you possess the legal
+ * right and ability to enter into this agreement and to use mimeTeX
+ * in accordance with it.
+ *      Your mimetex.zip distribution file should contain the file COPYING,
+ * an ascii text copy of the GNU General Public License, version 3.
+ * If not, point your browser to  http://www.gnu.org/licenses/
+ * or write to the Free Software Foundation, Inc.,
+ * 59 Temple Place, Suite 330,  Boston, MA 02111-1307 USA.
  * --------------------------------------------------------------------------
  *
  * Purpose:	chardef structure data for mimetex
@@ -60,6 +62,7 @@
  *				and rsfs fonts.
  * 07/12/03	J.Forkosh	Entirely new set of fonts generated.
  * 10/21/05	J.Forkosh	Compressed fonts generated
+ * 09/06/08	J.Forkosh	mimeTeX version 1.70 released.
  *
  ***************************************************************************/
 
