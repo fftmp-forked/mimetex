@@ -11,7 +11,7 @@ b2: 0544fed1fc3c4b43c171ce9f11d9061d251c694426512a7e18a7155b495f870d31b68ef0f85f
 
 ## 2012-02-10
 URL: https://web.archive.org/web/20120210065701/http://forkosh.com/mimetex.zip  
-description: 1.73+  
+description: 1.73  
 md5: 95400bb0f597760801a0841e7108f242  
 sha: a62307c8a97f0411637e0f505673d3ef65153888  
 sha256: 8cb5824487c76823427a2c5af31c0e7950dc48b8106cf716e73aed3cc033f78e  
@@ -121,10 +121,13 @@ for ver in 1.50-1 1.73-2 1.74-1 1.76-1; do
 done
 ```
 
+NB: version 1.73-2 is the same as version from web archive.
+
+
 # ubuntu
 ##   mimetex_1.73.orig.tar.gz
 URL: https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/mimetex/1.73-2/mimetex_1.73.orig.tar.gz  
-description: 1.73
+description: 1.73. Same as from web archive.  
 md5: 72a4040e946335480a8523ca29dfb373  
 sha: e620e6c7105366974fd0b9932443216446f2f586  
 sha256: f888f327a4fcffe0d25bec9b47c0c62c416fe2c4ba82999c1ee5786c4ef94f66  
