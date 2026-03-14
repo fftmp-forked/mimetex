@@ -108,7 +108,18 @@ sha256: 3bbe279b45af64380a72ee08e826d6d8939b519c7a17cf86851efe4675b1ad23
 b2: 5550a069b60888d99f7a8193f3d6a9da33ff850e20f2eaacfd308e3ad1e7c372abbf3436818e9b67b13e7cdbaa59a29e3fab67e618ca67872816aeec86772c1c  
 
 # debian
-`for f in README gfuntype.c gifsave.c mimetx.c mimetex.h mimetex.html texfonts.h; do wget https://sources.debian.org/data/main/m/mimetex/$(basename $(pwd))/$f; done; wget https://sources.debian.org/data/main/m/mimetex/$(basename $(pwd)).checksums;`
+```
+site='https://sources.debian.org/data/main/m/mimetex/'
+for ver in 1.50-1 1.73-2 1.74-1 1.76-1; do
+  mkdir ${ver}
+  cd "${ver}"
+  wget "${site}/${ver}.checksums"
+  for f in README gfuntype.c gifsave.c mimetex.c mimetex.h mimetex.html texfonts.h; do
+    wget "${site}/${ver}/${f}"
+  done
+  cd ..
+done
+```
 
 # ubuntu
 ##   mimetex_1.73.orig.tar.gz
