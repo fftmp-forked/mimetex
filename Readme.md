@@ -121,7 +121,9 @@ for ver in 1.50-1 1.73-2 1.74-1 1.76-1; do
 done
 ```
 
-NB: version 1.73-2 is the same as version from web archive.
+NB:  
+version 1.73-2 is the same as version from web archive (2012-02-10).  
+version 1.74-1 is almost the same as version from web archive (2012-11-10).  
 
 
 # ubuntu
