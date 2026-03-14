@@ -329,6 +329,7 @@ InitBitFile(void)
 {
     Buffer[Index = 0] = 0;
     BitsLeft = 8;
+    memset(Buffer,0,256);
 }
 
 
@@ -359,6 +360,7 @@ ResetOutBitFile(void)
 
         Buffer[Index = 0] = 0;
         BitsLeft = 8;
+        memset(Buffer,0,256);
     }
     return 0;
 }
@@ -394,6 +396,7 @@ WriteBits(int bits, int numbits)
 
             Buffer[Index = 0] = 0;
             BitsLeft = 8;
+            memset(Buffer,0,256);
         }
 
         /* now take care of the two specialcases */
@@ -474,6 +477,9 @@ AllocStrtab(void)
         FreeStrtab();
         return GIF_OUTMEM;
     }
+    memset(StrChr,0,MAXSTR*sizeof(Byte));
+    memset(StrNxt,0,MAXSTR*sizeof(Word));
+    memset(StrHsh,0,HASHSIZE*sizeof(Word));
     return GIF_OK;
 }
 

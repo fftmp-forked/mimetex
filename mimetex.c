@@ -1046,7 +1046,7 @@ if ( msgfp!=NULL && msglevel>=9999 )
 rp = (raster *)malloc(sizeof(raster));	/* malloc raster struct */
 if ( msgfp!=NULL && msglevel>=9999 )
   { fprintf(msgfp,"new_raster> rp=malloc(%d) returned (%s)\n",
-    sizeof(raster),(rp==NULL?"null ptr":"success")); fflush(msgfp); }
+    (int)sizeof(raster),(rp==NULL?"null ptr":"success")); fflush(msgfp); }
 if ( rp == (raster *)NULL )		/* malloc failed */
   goto end_of_job;			/* return error to caller */
 rp->width = width;			/* store width in raster struct */
@@ -5921,6 +5921,7 @@ static	struct { char *html; char *args; char *latex; } symbols[] =
    { "\\notin",	NULL,	"{\\not\\in}" },
    { "\\neq",	NULL,	"{\\not=}" },
    { "\\ne",	NULL,	"{\\not=}" },
+   { "\\pm",	NULL,	"{\\math\\plusminus}" }, /* don't have \bf\pm */
    { "\\mapsto", NULL,	"{\\rule[fs/2]{1}{5+fs}\\hspace{-99}\\to}" },
    { "\\hbar",	NULL,	"{\\compose~h{{\\fs{-1}-\\atop\\vspace3}}}" },
    { "\\angle",	NULL, "{\\compose{\\hspace{3}\\lt}{\\circle(10,15;-80,80)}}"},
@@ -8584,6 +8585,7 @@ int	delete_subraster();		/* if fail, free unneeded subraster*/
 int	baseht=1, baseln=0;		/* height,baseline of base symbol */
 int	pixsz = 1;			/*default #bits per pixel, 1=bitmap*/
 int	isstar=0, minspace=0;		/* defaults for negative hspace */
+int	maxwidth = 2047;		/* max width of expression in pixels*/
 char	*texsubexpr(), widtharg[256];	/* parse for optional {width} */
 int	evalterm(), evalue=0;		/* evaluate [args], {args} */
 subraster *rasterize(), *rightsp=NULL;	/*rasterize right half of expression*/
@@ -8600,7 +8602,7 @@ determine width if not given (e.g., \hspace{width}, \hfill{width})
 -------------------------------------------------------------------------- */
 if ( width == 0 ) {			/* width specified in expression */
   double dwidth;  int widthval;		/* test {width} before using it */
-  int minwidth = (isfill||isheight?1:-600); /* \hspace allows negative */
+  int minwidth = (isfill||isheight?1:-maxwidth); /* \hspace allows negative */
   /* --- check if optional [minspace] given for negative \hspace --- */
   if ( *(*expression) == '[' ) {	/* [minspace] if leading char is [ */
     /* ---parse [minspace], bump expression past it, evaluate expression--- */
@@ -8614,7 +8616,7 @@ if ( width == 0 ) {			/* width specified in expression */
   dwidth = unitlength*((double)evalterm(mimestore,widtharg)); /* scaled */
   widthval =				/* convert {width} to integer */
 		(int)( dwidth + (dwidth>=0.0?0.5:(-0.5)) );
-  if ( widthval>=minwidth && widthval<=600 ) /* sanity check */
+  if ( widthval>=minwidth && widthval<=maxwidth ) /* sanity check */
     width = widthval;			/* replace deafault width */
   } /* --- end-of-if(width==0) --- */
 /* -------------------------------------------------------------------------
@@ -8794,6 +8796,7 @@ subraster *new_subraster(), *rastack(), *spacesp=NULL; /*space below arrow*/
 int	delete_subraster();		/*free work areas in case of error*/
 int	evalterm();			/* evaluate [arg], {arg} */
 int	width = 10 + 8*size,  height;	/* width, height for \longxxxarrow */
+int	maxwidth = 1024;		/* max arrow width in pixels */
 int	islimits = 1;			/*true to handle limits internally*/
 int	limsize = size-1;		/* font size for limits */
 int	vspace = 1;			/* #empty rows below arrow */
@@ -8807,7 +8810,7 @@ if ( *(*expression) == '[' )		/*check for []-enclosed optional arg*/
     *expression = texsubexpr(*expression,widtharg,255,"[","]",0,0);
     widthval =				/* convert [width] to integer */
 	(int)((unitlength*((double)evalterm(mimestore,widtharg)))+0.5);
-    if ( widthval>=2 && widthval<=600 )	/* sanity check */
+    if ( widthval>=2 && widthval<=maxwidth )	/* sanity check */
       width = widthval; }		/* replace deafault width */
 /* --- now parse for limits, and bump expression past it(them) --- */
 if ( islimits )				/* handling limits internally */
@@ -8888,6 +8891,7 @@ subraster *rasterize(), *subsp=NULL,*supsp=NULL; /*rasterize limits*/
 subraster *rastcat();			/* cat superscript left, sub right */
 int	evalterm();			/* evaluate [arg], {arg} */
 int	height = 8 + 2*size,  width;	/* height, width for \longxxxarrow */
+int	maxheight = 800;		/* max arrow height in pixels */
 int	islimits = 1;			/*true to handle limits internally*/
 int	limsize = size-1;		/* font size for limits */
 int	pixsz = 1;			/*default #bits per pixel, 1=bitmap*/
@@ -8900,7 +8904,7 @@ if ( *(*expression) == '[' )		/*check for []-enclosed optional arg*/
     *expression = texsubexpr(*expression,heightarg,255,"[","]",0,0);
     heightval =				/* convert [height] to integer */
 	(int)((unitlength*((double)evalterm(mimestore,heightarg)))+0.5);
-    if ( heightval>=2 && heightval<=600 ) /* sanity check */
+    if ( heightval>=2 && heightval<=maxheight ) /* sanity check */
       height = heightval; }		/* replace deafault height */
 /* --- now parse for limits, and bump expression past it(them) --- */
 if ( islimits )				/* handling limits internally */
@@ -10547,6 +10551,7 @@ double	x=0.0,y=0.0,			/* x,y-coords for put,multiput*/
 	xinc=0.0,yinc=0.0;		/* x,y-incrementss for multiput*/
 int	width=0,  height=0,		/* #pixels width,height of picture */
 	ewidth=0, eheight=0,		/* pic element width,height */
+	maxwidth=1600, maxheight=1600,	/* max width,height in pixels */
 	ix=0,xpos=0, iy=0,ypos=0,	/* mimeTeX x,y pixel coords */
 	num=1, inum;			/* number reps, index of element */
 int	evalterm();			/* evaluate [arg] and {arg}'s */
@@ -10577,8 +10582,8 @@ if ( *picexpr == '\000' ) goto end_of_job; /* couldn't get {pic_elements} */
 allocate subraster and raster for complete picture
 -------------------------------------------------------------------------- */
 /* --- sanity check on width,height args --- */
-if ( width < 2 ||  width > 600
-||  height < 2 || height > 600 ) goto end_of_job;
+if ( width < 2 ||  width > maxwidth
+||  height < 2 || height > maxheight ) goto end_of_job;
 /* --- allocate and initialize subraster for constructed picture --- */
 if ( (picturesp=new_subraster(width,height,pixsz)) /*allocate new subraster*/
 ==   NULL )  goto end_of_job;		/* quit if failed */
@@ -10761,6 +10766,7 @@ int	thickness = 1;			/* line thickness */
 double	xinc=0.0, yinc=0.0,		/* x,y-increments for line, */
 	xlen=0.0, ylen=0.0;		/* x,y lengths for line */
 int	width=0,  height=0,		/* #pixels width,height of line */
+	maxwidth=1600, maxheight=1600,	/* max width,height in pixels */
 	rwidth=0, rheight=0;		/*alloc width,height plus thickness*/
 int	evalterm();			/* evaluate [arg] and {arg}'s */
 int	istop=0,  isright=0,		/* origin at bot-left if x,yinc>=0 */
@@ -10819,8 +10825,8 @@ if ( msgfp!=NULL && msglevel>=29 )	/* debugging */
 allocate subraster and raster for line
 -------------------------------------------------------------------------- */
 /* --- sanity check on width,height,thickness args --- */
-if ( width < 1 ||  width > 600
-||  height < 1 || height > 600
+if ( width < 1 ||  width > maxwidth
+||  height < 1 || height > maxheight
 ||  thickness<1||thickness>25 ) goto end_of_job;
 /* --- allocate and initialize subraster for constructed line --- */
 if ( (linesp=new_subraster(rwidth,rheight,pixsz)) /* alloc new subraster */
@@ -10887,7 +10893,8 @@ subraster *new_subraster(), *rulesp=NULL; /* subraster for rule */
 int	pixsz = 1;			/* pixels are one bit each */
 int	lift=0, width=0, height=0;	/* default rule parameters */
 double	dval;				/* convert ascii params to doubles */
-int	rwidth=0, rheight=0;		/* alloc width, height plus lift */
+int	rwidth=0, rheight=0,		/* alloc width, height plus lift */
+	maxwidth=1600, maxheight=1600;	/* max width,height in pixels */
 int	rule_raster();			/* draw rule in rulesp->image */
 int	evalterm();			/* evaluate args */
 /* -------------------------------------------------------------------------
@@ -10919,8 +10926,8 @@ rheight = height + (lift>=0?lift:	/* raster height plus lift */
 allocate subraster and raster for rule
 -------------------------------------------------------------------------- */
 /* --- sanity check on width,height,thickness args --- */
-if ( rwidth < 1 ||  rwidth > 600
-||  rheight < 1 || rheight > 600 ) goto end_of_job;
+if ( rwidth < 1 ||  rwidth > maxwidth
+||  rheight < 1 || rheight > maxheight ) goto end_of_job;
 /* --- allocate and initialize subraster for constructed rule --- */
 if ( (rulesp=new_subraster(rwidth,rheight,pixsz)) /* alloc new subraster */
 ==   NULL )  goto end_of_job;		/* quit if failed */
@@ -10983,7 +10990,8 @@ double	theta0=0.0, theta1=0.0;		/* ;theta0,theta1 instead of ;quads*/
 subraster *new_subraster(), *circsp=NULL; /* subraster for ellipse */
 int	pixsz = 1;			/* pixels are one bit each */
 double	xdiam=0.0, ydiam=0.0;		/* x,y major/minor axes/diameters */
-int	width=0,  height=0;		/* #pixels width,height of ellipse */
+int	width=0,  height=0,		/* #pixels width,height of ellipse */
+	maxwidth=1600, maxheight=1600;	/* max width,height in pixels */
 int	thickness = 1;			/* drawn lines are one pixel thick */
 int	evalterm();			/* evaluate [arg],{arg} expressions*/
 int	origin = 55;			/* force origin centered */
@@ -11027,8 +11035,8 @@ if ( msgfp!=NULL && msglevel>=29 )	/* debugging */
 allocate subraster and raster for complete picture
 -------------------------------------------------------------------------- */
 /* --- sanity check on width,height args --- */
-if ( width < 1 ||  width > 600
-||  height < 1 || height > 600 ) goto end_of_job;
+if ( width < 1 ||  width > maxwidth
+||  height < 1 || height > maxheight ) goto end_of_job;
 /* --- allocate and initialize subraster for constructed ellipse --- */
 if ( (circsp=new_subraster(width,height,pixsz)) /* allocate new subraster */
 ==   NULL )  goto end_of_job;		/* quit if failed */
@@ -11104,7 +11112,8 @@ double	r0=0.0,c0=0.0, r1=0.0,c1=0.0, rt=0.0,ct=0.0, /* bezier points */
 	r=0.0, c=0.0;			/* some point */
 int	evalterm();			/* evaluate [arg],{arg} expressions*/
 int	iarg=0;				/* 0=r0,c0 1=r1,c1 2=rt,ct */
-int	width=0, height=0;		/* dimensions of bezier raster */
+int	width=0, height=0,		/* dimensions of bezier raster */
+	maxwidth=1600, maxheight=1600;	/* max width,height in pixels */
 int	pixsz = 1;			/* pixels are one bit each */
 /*int	thickness = 1;*/		/* drawn lines are one pixel thick */
 int	origin = 0;			/*c's,r's reset to lower-left origin*/
@@ -11159,8 +11168,8 @@ if ( msgfp!=NULL && msglevel>=29 )	/* debugging */
 allocate raster
 -------------------------------------------------------------------------- */
 /* --- sanity check on width,height args --- */
-if ( width < 1 ||  width > 600
-||  height < 1 || height > 600 ) goto end_of_job;
+if ( width < 1 ||  width > maxwidth
+||  height < 1 || height > maxheight ) goto end_of_job;
 /* --- allocate and initialize subraster for constructed bezier --- */
 if ( (bezsp=new_subraster(width,height,pixsz)) /* allocate new subraster */
 ==   NULL )  goto end_of_job;		/* quit if failed */

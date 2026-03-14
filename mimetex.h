@@ -1196,6 +1196,7 @@ STATIC	mathchardef symtable[]
     { "\\div",		4,	CMSY10,   BINARYOP,	NULL },
     { "\\diamond",	5,	CMSY10,   BINARYOP,	NULL },
     { "\\pm",		6,	CMSY10,   BINARYOP,	NULL },
+    { "\\plusminus",	6,	CMSY10,   BINARYOP,	NULL },
     { "\\mp",		7,	CMSY10,   BINARYOP,	NULL },
     { "\\oplus",	8,	CMSY10,   BINARYOP,	NULL },
     { "\\ominus",	9,	CMSY10,   BINARYOP,	NULL },
