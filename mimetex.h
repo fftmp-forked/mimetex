@@ -2,7 +2,7 @@
 #define	_MIMETEX
 /****************************************************************************
  *
- * Copyright(c) 2002-2008, John Forkosh Associates, Inc. All rights reserved.
+ * Copyright(c) 2002-2011, John Forkosh Associates, Inc. All rights reserved.
  *           http://www.forkosh.com   mailto: john@forkosh.com
  * --------------------------------------------------------------------------
  * This file is part of mimeTeX, which is free software. You may redistribute
@@ -292,6 +292,9 @@ mathchardef
 #define	BBOLD10		(7)		/* blackboard bold \mathbb A ... */
 #define	STMARY10	(8)		/* stmaryrd math symbols */
 #define	CYR10		(9)		/* cyrillic (wncyr10.mf) */
+#define	CMMI10GR	(10)		/* CMMI10 with a for \alpha, etc */
+#define	CMMI10BGR	(11)		/* CMMIB10 with a for \alpha, etc */
+#define	BBOLD10GR	(12)		/* BBOLD10 with a for \alpha, etc */
 #define	NOTACHAR	(99)		/* e.g., \frac */
 /* --- dummy argument value for handlers --- */
 #define	NOVALUE		(-989898)	/*charnum,family,class used as args*/
@@ -301,7 +304,7 @@ mathchardef
  * ----------------------- */
 STATIC	int  nfontinfo			/* legal font#'s are 1...nfontinfo */
 #ifdef INITVALS
-  = 8
+  = 11
 #endif
   ;
 STATIC	struct {char *name; int family; int istext; int class;}
@@ -318,6 +321,9 @@ STATIC	struct {char *name; int family; int istext; int class;}
     { "\\mathbf",  CMMIB10, 0, -1 }, /*(6) \bf,\mathbf{abc}-->{\mathbf~abc}*/
     { "\\mathrm",  CMR10,   0, -1 }, /*(7) \mathrm */
     { "\\cyr",     CYR10,   1, -1 }, /*(8) \cyr (defaults as text mode) */
+    { "\\textgreek",CMMI10GR,1,-1 }, /*(9) \textgreek{ab}-->\alpha\beta */
+    { "\\textbfgreek",CMMI10BGR,1,-1 },/*(10)\textbfgreek{ab}-->\alpha\beta*/
+    { "\\textbbgreek",BBOLD10GR,1,-1 },/*(11)\textbbgreek{ab}-->\alpha\beta*/
     {  NULL,	   0,       0,  0 } }
 #endif
   ; /* --- end-of-fonts[] --- */
@@ -458,6 +464,9 @@ STATIC	fontfamily aafonttable[]
   { BBOLD10,{ bbold83, bbold100, bbold118, bbold131, bbold160, bbold180, bbold210, bbold250}},
   {STMARY10,{stmary83,stmary100,stmary118,stmary131,stmary160,stmary180,stmary210,stmary250}},
   {   CYR10,{ wncyr83, wncyr100, wncyr118, wncyr131, wncyr160, wncyr180, wncyr210, wncyr250}},
+  {CMMI10GR,{  cmmi83,  cmmi100,  cmmi118,  cmmi131,  cmmi160,  cmmi180,  cmmi210,  cmmi250}},
+  {CMMI10BGR,{cmmib83, cmmib100, cmmib118, cmmib131, cmmib160, cmmib180, cmmib210, cmmib250}},
+  {BBOLD10GR,{bbold83, bbold100, bbold118, bbold131, bbold160, bbold180, bbold210, bbold250}},
   {    -999,{    NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL}}
  }
 #endif
@@ -479,7 +488,10 @@ STATIC	fontfamily aafonttable[]
    { RSFS10,{ rsfs250,  rsfs100,  rsfs118,  rsfs131,  rsfs160,  rsfs180,  rsfs210,  rsfs250}},
   { BBOLD10,{bbold250, bbold100, bbold118, bbold131, bbold160, bbold180, bbold210, bbold250}},
  {STMARY10,{stmary250,stmary100,stmary118,stmary131,stmary160,stmary180,stmary210,stmary250}},
-  {   CYR10,{ wncyr83, wncyr100, wncyr118, wncyr131, wncyr160, wncyr180, wncyr210, wncyr250}},
+  {   CYR10,{wncyr250, wncyr100, wncyr118, wncyr131, wncyr160, wncyr180, wncyr210, wncyr250}},
+  {CMMI10GR,{ cmmi250,  cmmi100,  cmmi118,  cmmi131,  cmmi160,  cmmi180,  cmmi210,  cmmi250}},
+  {CMMI10BGR,{cmmib250,cmmib100, cmmib118, cmmib131, cmmib160, cmmib180, cmmib210, cmmib250}},
+  {BBOLD10GR,{bbold250,bbold100, bbold118, bbold131, bbold160, bbold180, bbold210, bbold250}},
    {   -999,{    NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL}}
   }
  #endif
@@ -687,9 +699,13 @@ STATIC	mathchardef symtable[]
     { "\\mathbb",	  5,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\rm",		  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\text",		  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
+    { "\\textbf",	  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\textrm",	  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\mathrm",	  7,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\cyr",		  8,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
+    { "\\textgreek",	  9,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
+    { "\\textbfgreek",	 10,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
+    { "\\textbbgreek",	 11,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\mathbf",	  6,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\bf",		  6,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\mathtt",	  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
@@ -2029,6 +2045,149 @@ STATIC	mathchardef symtable[]
     { "N0",		125,	CYR10,   VARIABLE,	NULL },
     { "<",		60,	CYR10,   VARIABLE,	NULL },
     { ">",		62,	CYR10,   VARIABLE,	NULL },
+
+    /* ------------------- C M M I G R ------------------------
+    Using "Beta code" <http://en.wikipedia.org/wiki/Beta_code>
+    to represent Greek characters in latin, e.g., type a to get
+    \alpha, etc.
+          symbol     charnum    family    class	    function
+    -------------------------------------------------------- */
+    /* --- uppercase greek letters --- */
+    { "G"/*\Gamma*/,	0,	CMMI10GR, VARIABLE,	NULL },
+    { "D"/*\Delta*/,	1,	CMMI10GR, VARIABLE,	NULL },
+    { "Q"/*\Theta*/,	2,	CMMI10GR, VARIABLE,	NULL },
+    { "L"/*\Lambda*/,	3,	CMMI10GR, VARIABLE,	NULL },
+    { "C"/*\Xi*/,	4,	CMMI10GR, VARIABLE,	NULL },
+    { "P"/*\Pi*/,	5,	CMMI10GR, VARIABLE,	NULL },
+    { "S"/*\Sigma*/,	6,	CMMI10GR, VARIABLE,	NULL },
+    { "U"/*\Upsilon*/,	7,	CMMI10GR, VARIABLE,	NULL },
+    { "F"/*\Phi*/,	8,	CMMI10GR, VARIABLE,	NULL },
+    { "Y"/*\Psi*/,	9,	CMMI10GR, VARIABLE,	NULL },
+    { "W"/*\Omega*/,	10,	CMMI10GR, VARIABLE,	NULL },
+    /* --- lowercase greek letters --- */
+    { "a"/*\alpha*/,	11,	CMMI10GR, VARIABLE,	NULL },
+    { "b"/*\beta*/,	12,	CMMI10GR, VARIABLE,	NULL },
+    { "g"/*\gamma*/,	13,	CMMI10GR, VARIABLE,	NULL },
+    { "d"/*\delta*/,	14,	CMMI10GR, VARIABLE,	NULL },
+    { "e"/*\epsilon*/,	15,	CMMI10GR, VARIABLE,	NULL },
+    { "z"/*\zeta*/,	16,	CMMI10GR, VARIABLE,	NULL },
+    { "h"/*\eta*/,	17,	CMMI10GR, VARIABLE,	NULL },
+    { "q"/*\theta*/,	18,	CMMI10GR, VARIABLE,	NULL },
+    { "i"/*\iota*/,	19,	CMMI10GR, VARIABLE,	NULL },
+    { "k"/*\kappa*/,	20,	CMMI10GR, VARIABLE,	NULL },
+    { "l"/*\lambda*/,	21,	CMMI10GR, VARIABLE,	NULL },
+    { "m"/*\mu*/,	22,	CMMI10GR, VARIABLE,	NULL },
+    { "n"/*\nu*/,	23,	CMMI10GR, VARIABLE,	NULL },
+    { "c"/*\xi*/,	24,	CMMI10GR, VARIABLE,	NULL },
+    { "p"/*\pi*/,	25,	CMMI10GR, VARIABLE,	NULL },
+    { "r"/*\rho*/,	26,	CMMI10GR, VARIABLE,	NULL },
+    { "s"/*\sigma*/,	27,	CMMI10GR, VARIABLE,	NULL },
+    { "t"/*\tau*/,	28,	CMMI10GR, VARIABLE,	NULL },
+    { "u"/*\upsilon*/,	29,	CMMI10GR, VARIABLE,	NULL },
+    { "f"/*\phi*/,	30,	CMMI10GR, VARIABLE,	NULL },
+    { "x"/*\chi*/,	31,	CMMI10GR, VARIABLE,	NULL },
+    { "y"/*\psi*/,	32,	CMMI10GR, VARIABLE,	NULL },
+    { "w"/*\omega*/,	33,	CMMI10GR, VARIABLE,	NULL },
+   #if 0
+    { "?"/*\varepsilon*/,34,	CMMI10GR, VARIABLE,	NULL },
+    { "?"/*\vartheta*/,	35,	CMMI10GR, VARIABLE,	NULL },
+    { "?"/*\varpi*/,	36,	CMMI10GR, VARIABLE,	NULL },
+    { "?"/*\varrho*/,	37,	CMMI10GR, VARIABLE,	NULL },
+    { "?"/*\varsigma*/,	38,	CMMI10GR, VARIABLE,	NULL },
+    { "?"/*\varphi*/,	39,	CMMI10GR, VARIABLE,	NULL },
+   #endif
+    /* ------------------- C M M I B G R ----------------------
+    Using "Beta code" <http://en.wikipedia.org/wiki/Beta_code>
+    to represent Greek characters in latin, e.g., type a to get
+    \alpha, etc.
+          symbol     charnum    family    class	    function
+    -------------------------------------------------------- */
+    /* --- uppercase greek letters --- */
+    { "G"/*\Gamma*/,	0,	CMMI10BGR, VARIABLE,	NULL },
+    { "D"/*\Delta*/,	1,	CMMI10BGR, VARIABLE,	NULL },
+    { "Q"/*\Theta*/,	2,	CMMI10BGR, VARIABLE,	NULL },
+    { "L"/*\Lambda*/,	3,	CMMI10BGR, VARIABLE,	NULL },
+    { "C"/*\Xi*/,	4,	CMMI10BGR, VARIABLE,	NULL },
+    { "P"/*\Pi*/,	5,	CMMI10BGR, VARIABLE,	NULL },
+    { "S"/*\Sigma*/,	6,	CMMI10BGR, VARIABLE,	NULL },
+    { "U"/*\Upsilon*/,	7,	CMMI10BGR, VARIABLE,	NULL },
+    { "F"/*\Phi*/,	8,	CMMI10BGR, VARIABLE,	NULL },
+    { "Y"/*\Psi*/,	9,	CMMI10BGR, VARIABLE,	NULL },
+    { "W"/*\Omega*/,	10,	CMMI10BGR, VARIABLE,	NULL },
+    /* --- lowercase greek letters --- */
+    { "a"/*\alpha*/,	11,	CMMI10BGR, VARIABLE,	NULL },
+    { "b"/*\beta*/,	12,	CMMI10BGR, VARIABLE,	NULL },
+    { "g"/*\gamma*/,	13,	CMMI10BGR, VARIABLE,	NULL },
+    { "d"/*\delta*/,	14,	CMMI10BGR, VARIABLE,	NULL },
+    { "e"/*\epsilon*/,	15,	CMMI10BGR, VARIABLE,	NULL },
+    { "z"/*\zeta*/,	16,	CMMI10BGR, VARIABLE,	NULL },
+    { "h"/*\eta*/,	17,	CMMI10BGR, VARIABLE,	NULL },
+    { "q"/*\theta*/,	18,	CMMI10BGR, VARIABLE,	NULL },
+    { "i"/*\iota*/,	19,	CMMI10BGR, VARIABLE,	NULL },
+    { "k"/*\kappa*/,	20,	CMMI10BGR, VARIABLE,	NULL },
+    { "l"/*\lambda*/,	21,	CMMI10BGR, VARIABLE,	NULL },
+    { "m"/*\mu*/,	22,	CMMI10BGR, VARIABLE,	NULL },
+    { "n"/*\nu*/,	23,	CMMI10BGR, VARIABLE,	NULL },
+    { "c"/*\xi*/,	24,	CMMI10BGR, VARIABLE,	NULL },
+    { "p"/*\pi*/,	25,	CMMI10BGR, VARIABLE,	NULL },
+    { "r"/*\rho*/,	26,	CMMI10BGR, VARIABLE,	NULL },
+    { "s"/*\sigma*/,	27,	CMMI10BGR, VARIABLE,	NULL },
+    { "t"/*\tau*/,	28,	CMMI10BGR, VARIABLE,	NULL },
+    { "u"/*\upsilon*/,	29,	CMMI10BGR, VARIABLE,	NULL },
+    { "f"/*\phi*/,	30,	CMMI10BGR, VARIABLE,	NULL },
+    { "x"/*\chi*/,	31,	CMMI10BGR, VARIABLE,	NULL },
+    { "y"/*\psi*/,	32,	CMMI10BGR, VARIABLE,	NULL },
+    { "w"/*\omega*/,	33,	CMMI10BGR, VARIABLE,	NULL },
+   #if 0
+    { "?"/*\varepsilon*/,34,	CMMI10BGR, VARIABLE,	NULL },
+    { "?"/*\vartheta*/,	35,	CMMI10BGR, VARIABLE,	NULL },
+    { "?"/*\varpi*/,	36,	CMMI10BGR, VARIABLE,	NULL },
+    { "?"/*\varrho*/,	37,	CMMI10BGR, VARIABLE,	NULL },
+    { "?"/*\varsigma*/,	38,	CMMI10BGR, VARIABLE,	NULL },
+    { "?"/*\varphi*/,	39,	CMMI10BGR, VARIABLE,	NULL },
+   #endif
+    /* ------------------ B B O L D G R -----------------------
+    Using "Beta code" <http://en.wikipedia.org/wiki/Beta_code>
+    to represent Greek characters in latin, e.g., type a to get
+    \alpha, etc.
+          symbol     charnum    family    class	    function
+    -------------------------------------------------------- */
+    /* --- uppercase greek letters --- */
+    { "G"/*\Gamma*/,	0,	BBOLD10GR, VARIABLE,	NULL },
+    { "D"/*\Delta*/,	1,	BBOLD10GR, VARIABLE,	NULL },
+    { "Q"/*\Theta*/,	2,	BBOLD10GR, VARIABLE,	NULL },
+    { "L"/*\Lambda*/,	3,	BBOLD10GR, VARIABLE,	NULL },
+    { "C"/*\Xi*/,	4,	BBOLD10GR, VARIABLE,	NULL },
+    { "P"/*\Pi*/,	5,	BBOLD10GR, VARIABLE,	NULL },
+    { "S"/*\Sigma*/,	6,	BBOLD10GR, VARIABLE,	NULL },
+    { "U"/*\Upsilon*/,	7,	BBOLD10GR, VARIABLE,	NULL },
+    { "F"/*\Phi*/,	8,	BBOLD10GR, VARIABLE,	NULL },
+    { "Y"/*\Psi*/,	9,	BBOLD10GR, VARIABLE,	NULL },
+    { "W"/*\Omega*/,	10,	BBOLD10GR, VARIABLE,	NULL },
+    /* --- lowercase greek letters --- */
+    { "a"/*\alpha*/,	11,	BBOLD10GR, VARIABLE,	NULL },
+    { "b"/*\beta*/,	12,	BBOLD10GR, VARIABLE,	NULL },
+    { "g"/*\gamma*/,	13,	BBOLD10GR, VARIABLE,	NULL },
+    { "d"/*\delta*/,	14,	BBOLD10GR, VARIABLE,	NULL },
+    { "e"/*\epsilon*/,	15,	BBOLD10GR, VARIABLE,	NULL },
+    { "z"/*\zeta*/,	16,	BBOLD10GR, VARIABLE,	NULL },
+    { "h"/*\eta*/,	17,	BBOLD10GR, VARIABLE,	NULL },
+    { "q"/*\theta*/,	18,	BBOLD10GR, VARIABLE,	NULL },
+    { "i"/*\iota*/,	19,	BBOLD10GR, VARIABLE,	NULL },
+    { "k"/*\kappa*/,	20,	BBOLD10GR, VARIABLE,	NULL },
+    { "l"/*\lambda*/,	21,	BBOLD10GR, VARIABLE,	NULL },
+    { "m"/*\mu*/,	22,	BBOLD10GR, VARIABLE,	NULL },
+    { "n"/*\nu*/,	23,	BBOLD10GR, VARIABLE,	NULL },
+    { "c"/*\xi*/,	24,	BBOLD10GR, VARIABLE,	NULL },
+    { "p"/*\pi*/,	25,	BBOLD10GR, VARIABLE,	NULL },
+    { "r"/*\rho*/,	26,	BBOLD10GR, VARIABLE,	NULL },
+    { "s"/*\sigma*/,	27,	BBOLD10GR, VARIABLE,	NULL },
+    { "t"/*\tau*/,	28,	BBOLD10GR, VARIABLE,	NULL },
+    { "u"/*\upsilon*/,	29,	BBOLD10GR, VARIABLE,	NULL },
+    { "f"/*\phi*/,	30,	BBOLD10GR, VARIABLE,	NULL },
+    { "x"/*\chi*/,	31,	BBOLD10GR, VARIABLE,	NULL },
+    { "y"/*\psi*/,	32,	BBOLD10GR, VARIABLE,	NULL },
+    { "w"/*\omega*/,	127,	BBOLD10GR, VARIABLE,	NULL },
     /* --- trailer record --- */
     { NULL,		-999,	-999,	-999,		NULL }
  }

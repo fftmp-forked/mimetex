@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- * Copyright(c) 2002-2009, John Forkosh Associates, Inc. All rights reserved.
+ * Copyright(c) 2002-2011, John Forkosh Associates, Inc. All rights reserved.
  *           http://www.forkosh.com   mailto: john@forkosh.com
  * --------------------------------------------------------------------------
  * This file is part of mimeTeX, which is free software. You may redistribute
@@ -388,8 +388,8 @@
 /* -------------------------------------------------------------------------
 Program id
 -------------------------------------------------------------------------- */
-#define	VERSION "1.71"		/* mimeTeX version number */
-#define REVISIONDATE "18 November 2009" /* date of most recent revision */
+#define	VERSION "1.72"		/* mimeTeX version number */
+#define REVISIONDATE "20 December 2010" /* date of most recent revision */
 
 /* -------------------------------------------------------------------------
 header files and macros
@@ -410,7 +410,7 @@ messages (used mostly by main() and also by rastmessage())
 static	char *copyright1 =		/* copyright, gnu/gpl notice */
  "+-----------------------------------------------------------------------+\n"
  "|mimeTeX vers " VERSION
- ", Copyright(c) 2002-2009, John Forkosh Associates, Inc|\n"
+ ", Copyright(c) 2002-2011, John Forkosh Associates, Inc|\n"
  "+-----------------------------------------------------------------------+\n"
  "| mimeTeX is free software, licensed to you under terms of the GNU/GPL, |\n"
  "|           and comes with absolutely no warranty whatsoever.           |",
@@ -3185,7 +3185,7 @@ allocate new raster and fill it with leftmost cols of rp
 if ( (bp=new_raster(newwidth,height,rp->pixsz)) /*allocate backspaced raster*/
 ==   (raster *)NULL ) goto end_of_job;	/* and quit if failed */
 /* --- fill new raster --- */
-if ( width-nback > 0 )			/* don't fill 1-pixel wide empty bp*/
+if ( 1 || width-nback > 0 )		/* don't fill 1-pixel wide empty bp*/
  for ( icol=0; icol<newwidth; icol++ )	/* find first non-empty col in row */
   for ( irow=0; irow<height; irow++ )	/* for each row inside rp */
     { int value = getpixel(rp,irow,icol); /* original pixel at irow,icol */
@@ -3898,7 +3898,8 @@ int	idef = 0,			/* symdefs[] index */
 int	symlen = strlen(symbol),	/* length of input symbol */
 	deflen, minlen=9999;		/*length of shortest matching symdef*/
 int	/*alnumsym = (symlen==1 && isalnum(*symbol)),*/ /*alphanumeric sym*/
-	alphasym = (symlen==1 && isalpha(*symbol)); /* or alpha symbol */
+	alphasym = (symlen==1 && isalpha(*symbol)), /* or alpha symbol */
+	slashsym = (*symbol=='\\');	/* or \backslashed symbol */
 int	family = fontinfo[fontnum].family; /* current font family */
 static	char *displaysyms[][2] = {	/*xlate to Big sym for \displaystyle*/
 	/* --- see table on page 536 in TLC2 --- */
@@ -3955,6 +3956,8 @@ for ( idef=0; ;idef++ )			/* until trailer record found */
   else					/* check against caller's symbol */
     if ( strncmp(symbol,symdefs[idef].symbol,symlen) == 0 ) /* found match */
      if ( (fontnum==0||family==CYR10)	/* mathmode, so check every match */
+     || (1 && symdefs[idef].handler!=NULL) /* or check every directive */
+     || (1 && istextmode && slashsym)	/*text mode and \backslashed symbol*/
      || (0 && istextmode && (!alphasym	/* text mode and not alpha symbol */
 	|| symdefs[idef].handler!=NULL))   /* or text mode and directive */
      || (symdefs[idef].family==family	/* have correct family */
@@ -5519,7 +5522,7 @@ static	struct { char *html; char *args; char *latex; } symbols[] =
    { "\\versionnumber",	NULL, "{\\text" VERSION "}" },
    { "\\revisiondate",	NULL, "{\\text" REVISIONDATE "}" },
    { "\\copyrighttext",	NULL,
-	"{\\text Copyright (c) 2002-2009, John Forkosh Associates, Inc.}" },
+	"{\\text Copyright (c) 2002-2011, John Forkosh Associates, Inc.}" },
    { "\\homepagetext",	NULL,
 	"{\\text http://www.forkosh.com/mimetex.html}" },
    /* --------------------------------------------
@@ -5605,7 +5608,8 @@ static	struct { char *html; char *args; char *latex; } symbols[] =
    { "\\dots",	NULL,	"{\\cdots}" },
    { "\\cdots",	NULL,	"{\\raisebox3{\\ldots}}" },
    { "\\ldots",	NULL,	"{\\fs4.\\hspace1.\\hspace1.}" },
-   { "\\ddots",	NULL,	"{\\fs4\\raisebox8.\\hspace1\\raisebox4.\\hspace1.}"},
+   { "\\ddots",	NULL,	"{\\fs4\\raisebox8.\\hspace1\\raisebox4."
+			"\\hspace1\\raisebox0.}"},
    { "\\notin",	NULL,	"{\\not\\in}" },
    { "\\neq",	NULL,	"{\\not=}" },
    { "\\ne",	NULL,	"{\\not=}" },
@@ -6412,7 +6416,7 @@ Allocations and Declarations
 int	status = 0;			/*1 if any snippet found in string*/
 char	snip[99], *snipptr = snippets,	/* munge through each snippet */
 	delim = ',', *delimptr = NULL;	/* separated by delim's */
-char	stringcp[999], *cp = stringcp;	/*maybe lowercased copy of string*/
+char	stringcp[4096], *cp = stringcp;	/*maybe lowercased copy of string*/
 /* -------------------------------------------------------------------------
 initialization
 -------------------------------------------------------------------------- */
@@ -6420,7 +6424,7 @@ initialization
 if ( string==NULL || snippets==NULL ) goto end_of_job; /* missing arg */
 if ( *string=='\000' || *snippets=='\000' ) goto end_of_job; /* empty arg */
 /* --- copy string and lowercase it if case-insensitive --- */
-strcpy(stringcp,string);		/* local copy of string */
+strninit(stringcp,string,4064);		/* local copy of string */
 if ( !iscase )				/* want case-insensitive compares */
   for ( cp=stringcp; *cp != '\000'; cp++ ) /* so for each string char */
     if ( isupper(*cp) ) *cp = tolower(*cp); /*lowercase any uppercase chars*/
@@ -8997,7 +9001,7 @@ subraster *rasterize(), *fontsp=NULL,	/* rasterize chars in font */
 int	oldsmashmargin = smashmargin;	/* turn off smash in text mode */
 #if 0
 /* --- fonts recognized by rastfont --- */
-static	int  nfonts = 6;		/* legal font #'s are 1...nfonts */
+static	int  nfonts = 11;		/* legal font #'s are 1...nfonts */
 static	struct {char *name; int class;}
   fonts[] =
     { /* --- name  class 1=upper,2=alpha,3=alnum,4=lower,5=digit,9=all --- */
@@ -9010,6 +9014,9 @@ static	struct {char *name; int class;}
 	{ "\\mathbf",	-1 },		/*(6) \bf,\mathbf{abc}-->{\bf~abc} */
 	{ "\\mathrm",   -1 },		/*(7) \mathrm */
 	{ "\\cyr",      -1 },		/*(8) \cyr */
+	{ "\\textgreek",-1 },		/*(9) \textgreek */
+	{ "\\textbfgreek",CMMI10BGR,1,-1 },/*(10) \textbfgreek{ab} */
+	{ "\\textbbgreek",BBOLD10GR,1,-1 },/*(11) \textbbgreek{ab} */
 	{ NULL,		0 }
     } ; /* --- end-of-fonts[] --- */
 #endif
@@ -12380,7 +12387,7 @@ char	*urlprune ( char *url, int n )
 /* -------------------------------------------------------------------------
 Allocations and Declarations
 -------------------------------------------------------------------------- */
-static	char pruned[1024];		/* pruned url returned to caller */
+static	char pruned[2048];		/* pruned url returned to caller */
 char	*purl = /*NULL*/pruned;		/* ptr to pruned, init for error */
 char	*delim = NULL;			/* delimiter separating components */
 char	*strnlower();			/* lowercase a string */
@@ -12395,7 +12402,7 @@ if ( isempty(url) ) goto end_of_job;	/* missing input, so return NULL */
 if ( n < 0 ) n = (-n);			/* flip n positive */
 if ( n == 0 ) n = 999;			/* retain all levels of url */
 /* --- preprocess url --- */
-strninit(pruned,url,999);		/* copy url to our static buffer */
+strninit(pruned,url,2032);		/* copy url to our static buffer */
 strlower(pruned);			/* lowercase it and... */
 trimwhite(pruned);			/*remove leading/trailing whitespace*/
 /* --- first remove leading http:// --- */
@@ -12458,7 +12465,7 @@ int	urlncmp ( char *url1, char *url2, int n )
 Allocations and Declarations
 -------------------------------------------------------------------------- */
 char	*urlprune(), *prune=NULL,	/* prune url's */
-	prune1[1024], prune2[1024];	/* pruned copies of url1,url2 */
+	prune1[4096], prune2[4096];	/* pruned copies of url1,url2 */
 int	ismatch = 0;			/* true if url's match */
 /* -------------------------------------------------------------------------
 prune url's and compare the pruned results
@@ -12469,10 +12476,10 @@ if ( isempty(url1)			/*make sure both url1,url2 supplied*/
 /* --- prune url's --- */
 prune = urlprune(url1,n);		/* ptr to pruned version of url1 */
 if ( isempty(prune) ) goto end_of_job;	/* some problem with url1 */
-strninit(prune1,prune,999);		/* local copy of pruned url1 */
+strninit(prune1,prune,4064);		/* local copy of pruned url1 */
 prune = urlprune(url2,n);		/* ptr to pruned version of url2 */
 if ( isempty(prune) ) goto end_of_job;	/* some problem with url2 */
-strninit(prune2,prune,999);		/* local copy of pruned url2 */
+strninit(prune2,prune,4064);		/* local copy of pruned url2 */
 /* --- compare pruned url's --- */
 if ( strcmp(prune1,prune2) == 0 )	/* pruned url's are identical */
   ismatch = 1;				/* signal match to caller */
