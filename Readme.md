@@ -154,3 +154,12 @@ md5: d1530fc8609829d17f01dc62460e38a7
 sha: f6f06bc7ea44108a318fe32cc501932b05eae7cc  
 sha256: df1b6cb2937354a5de0e0bbc8c133bb338fa0bfa494b9c69faf354c3122e449e  
 b2: a74c368e7e4519da45d4c8554e5fb569591c618b7efed1585a0d2f0640512a43ceb6a0ca2c5e245631d3dbe72877d8c11b16788e79917f7ae4ca95aea6c057e4  
+
+# mandriva
+## 1.71
+URL: https://abf-downloads.openmandriva.org/rolling/repository/SRPMS/unsupported/release/mimetex-1.77-1.src.rpm  
+description: 1.71 inside, but mandriva package have version 1.77  
+md5: 398c34a686024275564740c8c8559539  
+sha: 31955891f3cc8ac9fe5d31cba618c4de1e29ced3  
+sha256: 645db7a6beb64c43d9d9d6458523f9e377cdacc2f64c1ec4e2c76eb19fbb220f  
+b2: 439f84593026620190abed1f3198aa5a9254ac57fba4eb48d4ebacdec7f1f38fa8c78955f36cb35cb7987321e064ba53072d3660fbf38e2606e89630d5afbcc3  
