@@ -1,0 +1,1 @@
+`for f in README gfuntype.c gifsave.c mimetx.c mimetex.h mimetex.html texfonts.h; do wget https://sources.debian.org/data/main/m/mimetex/$(basename $(pwd))/$f; done; wget https://sources.debian.org/data/main/m/mimetex/$(basename $(pwd)).checksums;`
