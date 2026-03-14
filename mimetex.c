@@ -399,7 +399,7 @@
  * 11/15/11	J.Forkosh	Version 1.73 released.
  * 02/15/12	J.Forkosh	Version 1.74 released.
  * 12/28/16	J.Forkosh	Version 1.75 released.
- * 02/18/17	J.Forkosh	Most recent revision (also see REVISIONDATE)
+ * 04/23/17	J.Forkosh	Most recent revision (also see REVISIONDATE)
  * See  http://www.forkosh.com/mimetexchangelog.html  for further details.
  *
  ****************************************************************************/
@@ -408,7 +408,7 @@
 Program id
 -------------------------------------------------------------------------- */
 #define	VERSION "1.75"			/* mimeTeX version number */
-#define REVISIONDATE "18 Feb. 2017"	/* date of most recent revision */
+#define REVISIONDATE "23 Apr. 2017"	/* date of most recent revision */
 #define COPYRIGHTTEXT "Copyright(c) 2002-2017, John Forkosh Associates, Inc"
 
 /* -------------------------------------------------------------------------
@@ -791,6 +791,12 @@ other variables
     #define REFLEVELS 3			/* default matches abc.def.com */
   #endif
 #endif
+/* --- password to bypass preceding REFERER checks --- */
+#if !defined(PASSWORD)
+  #define PASSWORD "\000"               /* \password{PASSWORD} in expression */
+#endif
+static  char password[128] = "\000";    /* user's \password{password} */
+static  int  ispassword = 0;            /* true if password==PASSWORD */
 /* --- check whether or not \input, \counter, \environment permitted --- */
 #if defined(DEFAULTSECURITY)		/* default security specified */
   #define EXPLICITDEFSECURITY		/* don't override explicit default */
@@ -5977,6 +5983,8 @@ static	struct { char *html; char *args; char *latex; } symbols[] =
    { "\\aangle","26",	"{\\boxaccent{#1}{#2}}" },
    { "\\actuarial","2 ","{#1\\boxaccent{6}{#2}}" }, /*comprehensive sym list*/
    { "\\boxaccent","2", "{\\fbox[,#1]{#2}}" },
+   { "\\password", "1",	"\000" },
+   { "\\comment", "1",	"\000" },
    /* --------------------------------------------
      html char termchar  LaTeX equivalent...
    -------------------------------------------- */
@@ -6027,12 +6035,14 @@ static	struct { char *html; char *args; char *latex; } symbols[] =
    { "\\AA",	NULL,	"{\\rm~A\\limits^{-1$o}}" },
    { "\\aa",	NULL,	"{\\rm~a\\limits^{-1$o}}" },
    { "\\bmod",	NULL,	"{\\hspace2{\\rm~mod}\\hspace2}" },
+   { "\\mod",	NULL,	"{\\hspace2{\\rm~mod}\\hspace2}" },
    { "\\vdots",	NULL,	"{\\raisebox3{\\rotatebox{90}{\\ldots}}}" },
    { "\\dots",	NULL,	"{\\cdots}" },
    { "\\cdots",	NULL,	"{\\raisebox3{\\ldots}}" },
    { "\\ldots",	NULL,	"{\\fs4.\\hspace1.\\hspace1.}" },
    { "\\ddots",	NULL,	"{\\fs4\\raisebox8.\\hspace1\\raisebox4."
 			"\\hspace1\\raisebox0.}"},
+   { "\\cong",	NULL,	"{\\raisebox{-4}{\\approx\\atop-}}" },
    { "\\notin",	NULL,	"{\\not\\in}" },
    { "\\neq",	NULL,	"{\\not=}" },
    { "\\ne",	NULL,	"{\\not=}" },
@@ -6304,6 +6314,10 @@ for(isymbol=0; (htmlsym=symbols[isymbol].html) != NULL; isymbol++)
 	/* --- (recursively) call mimeprep() to prep the argument --- */
 	if ( !isempty(argval) )		/* have an argument */
 	  mimeprep(argval);		/* so (recursively) prep it */
+	/* --- "specials" (e.g., \password) check --- */
+	if ( strstr(htmlsym,"password") != NULL ) { /* have \password{} */
+	  argval[64] = '\000';		/* make sure it's not too long */
+	  strcpy(password,argval); }	/* save it for http_referer checks */
 	/* --- replace #`iarg` in macro with argval --- */
 	sprintf(argsignal,"#%d",iarg);	/* #1...#9 signals argument */
 	while ( (argsigptr=strstr(argval,argsignal)) != NULL ) /* #1...#9 */
@@ -9226,14 +9240,38 @@ int	width=0,			/* width of constructed raster */
 int	baseht=0, baseln=0;		/* height,baseline of base symbol */
 /*int	istweak = 1;*/			/*true to tweak baseline alignment*/
 int	rule_raster(),			/* draw horizontal line for frac */
-	lineheight = 1;			/* thickness of fraction line */
+	lineheight = (isfrac?1:0);	/* thickness of fraction line */
 int	vspace = (size>2?2:1);		/*vertical space between components*/
 int	delete_subraster();		/*free work areas in case of error*/
 int	type_raster();			/* display debugging output */
 /* -------------------------------------------------------------------------
 Obtain numerator and denominator, and rasterize them
 -------------------------------------------------------------------------- */
-/* --- parse for numerator,denominator and bump expression past them --- */
+/* --- first parse out optional \frac[] argument(s) --- */
+if ( *(*expression) == '[' ) {		/* check for []-enclosed arg(s) */
+  char optarg[512];			/* buffer for optional \frac[arg] */
+  *expression = texsubexpr(*expression,optarg,511,"[","]",0,0);
+  if ( !isempty(optarg) ) {		/* got optional arg */
+    char *semi = strchr(optarg,';');	/* optionally followed by ; */
+    if ( semi != NULL ) {		/* found further optional ; */
+      char *comma = strchr(semi+1,',');	/* further optionally followed by , */
+      *semi = '\000';			/* null-terminate optarg at ; */
+      if ( comma != NULL ) *comma = '\000'; /* and that arg at (first) , */
+      /* nextarg=atoi(semi+1)); */	/* convert argument after ; */
+      isfrac = atoi(semi+1);		/* kludge for \frac[;0] = \atop */
+      lineheight = (isfrac?1:0);	/* and reset lineheight */
+      if ( comma != NULL ) {		/* have , and arg */
+        /* nextarg=atoi(comma+1); */	/* convert argument after , */
+        } /* --- end-of-if(comma!=NULL) --- */
+      } /* --- end-of-if(semi!=NULL) --- */
+    trimwhite(optarg);			/* remove leading/trailing whitespace*/
+    if ( !isempty(optarg) )		/* wasn't just ";other,args" */
+      vspace = atoi(optarg);		/* convert optarg to vspace int */
+    if ( vspace<0 || vspace>999 )	/* sanity check (revert to default) */
+      vspace = (size>2?2:1);		/* back to original default */
+    } /* --- end-of-if(!isempty(optarg)) --- */
+  } /* --- end-of-if(**expression=='[') --- */
+/* ---then parse for numerator,denominator and bump expression past them--- */
 *expression = texsubexpr(*expression,numer,0,"{","}",0,0);
 *expression = texsubexpr(*expression,denom,0,"{","}",0,0);
 if ( *numer=='\000' && *denom=='\000' )	/* missing both components of frac */
@@ -9248,7 +9286,7 @@ if ( *denom != '\000' )			/* have a denominator */
   { if ( numsp != NULL )		/* already rasterized numerator */
       delete_subraster(numsp);		/* so free now-unneeded numerator */
     goto end_of_job; }			/* and quit */
-/* --- if one componenet missing, use a blank space for it --- */
+/* --- if one component missing, use a blank space for it --- */
 if ( numsp == NULL )			/* no numerator given */
   numsp = rasterize("[?]",size-1);	/* missing numerator */
 if ( densp == NULL )			/* no denominator given */
@@ -9264,7 +9302,7 @@ numheight = (numsp->image)->height;	/* get numerator's height */
 construct raster with numerator stacked over denominator
 -------------------------------------------------------------------------- */
 /* --- construct raster with numer/denom --- */
-if ( (fracsp = rastack(densp,numsp,0,2*vspace+lineheight,1,3))/*numer/denom*/
+if ( (fracsp = rastack(densp,numsp,0,(2*vspace)+lineheight,1,3))/*numer/denom*/
 ==  NULL )				/* failed to construct numer/denom */
   { delete_subraster(numsp);		/* so free now-unneeded numerator */
     delete_subraster(densp);		/* and now-unneeded denominator */
@@ -11782,9 +11820,9 @@ end_of_job:
  *				requested, or NULL for any parsing error
  * --------------------------------------------------------------------------
  * Notes:     o	Summary of syntax...
- *		  \ovalbox[n]{subexpression}
+ *		  \ovalbox[n;#ovals,wdelta,hdelta]{subexpression}
  *	      o	Originally copied from rastfbox(), above,
- *		but I've removed the [][] optional argument parsing
+ *		but I've modified the [] optional argument parsing
  *	      o Thanks to answers from Jean-Marie Becker and "Narasimham" at
  *		   http://math.stackexchange.com/questions/2149677/
  *		for providing info about ellipse circumscribing a rectangle
@@ -11797,7 +11835,8 @@ subraster *rastovalbox ( char **expression, int size, subraster *basesp,
 Allocations and Declarations
 -------------------------------------------------------------------------- */
 char	*texsubexpr(), subexpr[MAXSUBXSZ+1], narg[512], /* args */
-	composexpr[MAXSUBXSZ+128];	/* compose subexpr[] with ellipse */
+	composexpr[MAXSUBXSZ+2048],	/* compose subexpr[] with ellipse(s)*/
+	ovalexpr[2048];			/* nested \compose{}{}'s */
 subraster *rasterize(), *framesp=NULL;	/* rasterize subexpr to be framed */
 int	delete_subraster();		/* just need width,height */
 int	fwidth = 3+size/999;		/* extra frame width */
@@ -11808,15 +11847,33 @@ int	width=(-1), height=(-1),	/* width,height of subexpr[] */
 double	x0=0.0, y0=0.0,			/*rectangle half-width, half-height*/
 	a=0.0,  b=0.0;			/*ellipse semi-major, semi-minor axis*/
 double	n = 2.0;			/*width/height=(semi-major/minor)^n*/
+int	ioval=0, novals=1,		/* #concentric ovals to draw */
+	wdelta=(3), hdelta=(-3);	/*width,height deltas for each oval*/
 /* -------------------------------------------------------------------------
 obtain {subexpr} argument
 -------------------------------------------------------------------------- */
 /* --- first check for optional \ovalbox[n] and bump expression past it--- */
 if ( *(*expression) == '[' ) {		/* check for []-enclosed n arg */
   *expression = texsubexpr(*expression,narg,511,"[","]",0,0);
-  if ( !isempty(narg) )			/* got n */
-    if ( (n = atof(narg))		/* convert to double */
+  if ( !isempty(narg) ) {		/* got n */
+    char *semi = strchr(narg,';');	/* optionally followed by ;#ovals */
+    if ( semi != NULL ) {		/* found optional ;#ovals */
+      char *comma = strchr(semi+1,',');	/* optionally followed by ,w,hdelta */
+      *semi = '\000';			/* null-terminate 'n' argument at ; */
+      if ( comma != NULL ) *comma = '\000'; /* and #ovals arg at (first) , */
+      if ( (novals=atoi(semi+1))	/* convert #ovals argument after ; */
+      < 1 ) novals = 1;			/* and make sure it's >0 */
+      if ( comma != NULL ) {		/*have ,wdelta and maybe ,hdelta args*/
+        char *comma2 = strchr(comma+1,','); /* ,wdelta and maybe ,hdelta */
+        if ( comma2 != NULL ) *comma2 = '\000'; /* null-terminate wdelta */
+        hdelta = wdelta = atoi(comma+1); /* init both wdelta,hdelta */
+        if ( comma2 != NULL )		/* but we have separate ,hdelta */
+          hdelta = atoi(comma2+1);	/* so set hdelta separately */
+        } /* --- end-of-if(comma!=NULL) --- */
+      } /* --- end-of-if(semi!=NULL) --- */
+    if ( (n = atof(narg))		/* convert narg to double */
     <=   .001 ) n = 2.0;		/* sanity check (revert to default) */
+    } /* --- end-of-if(!isempty(narg)) --- */
   } /* --- end-of-if(**expression=='[') --- */
 /* --- parse for {subexpr} arg, and bump expression past it --- */
 *expression = texsubexpr(*expression,subexpr,0,"{","}",0,0);
@@ -11843,12 +11900,30 @@ width  = (int)(2.0*a + 0.5) + fwidth;
 height = (int)(2.0*b + 0.5) + fwidth;
 baseline += ((height-origheight)+1)/2;	/* baseline of subexpr[] chars */
 /* -------------------------------------------------------------------------
-compose with circumscribed ellipse, reset params, and return it to caller
+construct nested \compose{\compose{\circle(,)}{\circle(,)}}{\circle(,)}
+-------------------------------------------------------------------------- */
+*ovalexpr = '\000';			/* init as empty string */
+for ( ioval=0; ioval<novals; ioval++ ) { /* nest each oval */
+  char thisoval[2048],			/* oval to be nested with ovalexpr */
+       ovalbuff[2048];			/* temp ovalexpr buffer */
+  int thiswidth  =  width + (ioval*wdelta), /*  width for this oval */
+      thisheight = height + (ioval*hdelta); /* height for this oval */
+  if ( strlen(ovalexpr) > 1024 ) break;	/* sanity check */
+  strcpy(ovalbuff,ovalexpr);		/* save current ovalexpr */
+  sprintf(thisoval,"\\circle(%d,%d)",thiswidth,thisheight); /*draw this oval*/
+  if ( ioval == 0 ) {			/* initial oval */
+    strcpy(ovalexpr,thisoval); }	/* just copy \circle(,) directive */
+  else {				/* nest with \compose{}{}'s */
+    sprintf(ovalexpr,"\\compose{%s}{%s}",ovalbuff,thisoval); }
+  } /* --- end-of-for(ioval) --- */
+/* -------------------------------------------------------------------------
+compose with circumscribed ellipse(s), reset params, and return it to caller
 -------------------------------------------------------------------------- */
 /* --- construct expression to be rasterized
        (note: too bad we have to re-rasterize original subexpr[]) --- */
-sprintf(composexpr,"\\compose{\\circle(%d,%d)}{%.8000s}",
-        width,height,subexpr);
+      /* sprintf(composexpr,"\\compose{\\circle(%d,%d)}{%.8000s}",
+         width,height,subexpr); */
+sprintf(composexpr,"\\compose{%s}{%.8000s}", ovalexpr,subexpr);
 if ( (framesp = rasterize(composexpr,size)) /*rasterize ellipse with subexpr*/
 ==   NULL ) goto end_of_job;		/* and quit if failed */
 framesp->baseline = baseline;		/* reset baseline (I hope) */
@@ -16004,7 +16079,7 @@ if ( !isquery				/* don't have an html query string */
 /* ---
  * check for <form> input
  * ---------------------- */
-if ( isquery ) {				/* must be <form method="get"> */
+if ( isquery ) {			/* must be <form method="get"> */
  if ( !memcmp(expression,"formdata",8) ) /*must be <input name="formdata"> */
   { char *delim=strchr(expression,'=');	/* find equal following formdata */
     if ( delim != (char *)NULL )	/* found unescaped equal sign */
@@ -16116,9 +16191,24 @@ if ( 1 || isquery )			/* queries or command-line */
     expression[npref] = '{';		/* followed by { */
     strcat(expression,"}"); }		/* and terminating } to balance { */
 /* ---
+ * preprocess expression, converting LaTeX constructs for mimeTeX,
+ * and getting \password{} for referer checks
+ * ------------------------------------------------------------------ */
+if ( 1 && expression!=NULL ) {		/* have expression to rasterize */
+  expression = mimeprep(expression);	/* preprocess expression */
+  if ( *password != '\000') {		/* have \password{} from user */
+    if ( strcmp(password,PASSWORD) == 0 ) /*and it matches #define'd PASSWORD*/
+      ispassword = 1;			/* set flag for successful password */
+    if ( 1 && !isdumpimage && !isquery	/* display password */
+    &&   msglevel>=1 && msgfp!=NULL )
+      fprintf(msgfp,"mimeTeX> \\password{%s} %s\n",
+      password, (ispassword==1?"successful":"failed") ); }
+  } /* --- end-of-if(expression!=NULL) --- */
+/* ---
  * check if http_referer is allowed to use this image and to use \input{}
  * ---------------------------------------------------------------------- */
-if ( isquery ) {			/* not relevant if "interactive" */
+if ( isquery				/* not relevant if "interactive" */
+&&   !ispassword ) {			/* nor if user supplied password */
  /* --- check -DREFERER=\"comma,separated,list\" of valid referers --- */
  if ( referer != NULL ) {		/* compiled with -DREFERER=\"...\" */
   if ( strcmp(referer,"month") != 0 )	/* but it's *only* "month" signal */
@@ -16137,6 +16227,8 @@ if ( isquery ) {			/* not relevant if "interactive" */
        strdetex(urlprune(referer_match,reflevels),1),0);/*with referer_match*/
      isinvalidreferer = 1; }		/* and signal invalid referer */
    } /* --- end-of-if(reflevels>0) --- */
+ } /* --- end-of-if(isquery&&!ispassword) --- */
+if ( isquery ) {			/* not relevant if "interactive" */
  /* --- check -DINPUTREFERER=\"comma,separated,list\" of \input users --- */
  inputseclevel = INPUTSECURITY;		/* set default input security */
  if ( inputreferer != NULL ) {		/* compiled with -DINPUTREFERER= */
@@ -16150,7 +16242,8 @@ if ( isquery ) {			/* not relevant if "interactive" */
 /* ---
  * check if referer contains "month" signal
  * ---------------------------------------- */
-if ( isquery )				/* not relevant if "interactive" */
+if ( isquery				/* not relevant if "interactive" */
+&&   !ispassword )			/* nor if user supplied password */
  if ( referer != NULL )			/* nor if compiled w/o -DREFERER= */
   if ( !isinvalidreferer )		/* nor if already invalid referer */
    if ( strstr(referer,"month") != NULL ) /* month check requested */
@@ -16160,7 +16253,8 @@ if ( isquery )				/* not relevant if "interactive" */
 /* ---
  * check if http_referer is to be denied access
  * -------------------------------------------- */
-if ( isquery )				/* not relevant if "interactive" */
+if ( isquery				/* not relevant if "interactive" */
+&&   !ispassword )			/* nor if user supplied password */
  if ( !isinvalidreferer )		/* nor if already invalid referer */
   { int	iref=0, msgnum=(-999),		/* denyreferer index, message# */
     whundredths = 0;			/* or wait hundredths of a sec */
@@ -16187,7 +16281,8 @@ if ( isquery )				/* not relevant if "interactive" */
       isinvalidreferer = 1; }		/* and signal invalid referer */
   } /* --- end-of-if(!isinvalidreferer) --- */
 /* --- also check maximum query_string length if no http_referer given --- */
-if ( isquery )				/* not relevant if "interactive" */
+if ( isquery				/* not relevant if "interactive" */
+&&   !ispassword )			/* nor if user supplied password */
  if ( !isinvalidreferer )		/* nor if already invalid referer */
   if ( !ishttpreferer )			/* no http_referer supplied */
    if ( strlen(expression) > norefmaxlen ) { /* query_string too long */
@@ -16295,8 +16390,9 @@ if ( !isdumpimage && !ispbmpgm )	/* don't mix ascii with image dump */
 /* -------------------------------------------------------------------------
 rasterize expression and put a border around it
 -------------------------------------------------------------------------- */
-/* --- preprocess expression, converting LaTeX constructs for mimeTeX  --- */
-if ( expression != NULL ) {		/* have expression to rasterize */
+/* --- preprocess expression, converting LaTeX constructs for mimeTeX
+       (now done above to get \password{} before referer checks) --- */
+if ( 0 && expression!=NULL ) {		/* have expression to rasterize */
   expression = mimeprep(expression); }	/* preprocess expression */
 /* --- double-check that we actually have an expression to rasterize --- */
 if ( expression == NULL ) {		/* nothing to rasterize */
