@@ -98,11 +98,12 @@
  *		bezier_raster(rp,r0,c0,r1,c1,rt,ct)   draw bezier recursively
  *		border_raster(rp,ntop,nbot,isline,isfree)put border around rp
  *		backspace_raster(rp,nback,pback,minspace,isfree)    neg space
- *		--- raster (and chardef) output functions ---
+ *		--- raster (and chardef) output (and one input) functions ---
  *		type_raster(rp,fp)       emit ascii dump of rp on file ptr fp
  *		type_bytemap(bp,grayscale,width,height,fp) dump bytemap on fp
  *		xbitmap_raster(rp,fp)           emit mime xbitmap of rp on fp
  *		type_pbmpgm(rp,ptype,file)     pbm or pgm image of rp to file
+ *		read_pbm(fp,sf)     read pbm from file (or pipe) opened on fp
  *		cstruct_chardef(cp,fp,col1)         emit C struct of cp on fp
  *		cstruct_raster(rp,fp,col1)          emit C struct of rp on fp
  *		hex_bitmap(rp,fp,col1,isstr)emit hex dump of rp->pixmap on fp
@@ -140,6 +141,9 @@
  *		isnumeric(s)                     determine if s is an integer
  *		evalterm(store,term)     evaluate numeric value of expression
  *		getstore(store,identifier)return value corresponding to ident
+ *		getdirective(string,directive,iscase,isvalid,nargs,args) \dir
+ *		strpspn(s,reject,segment) non-{[()]} chars of s not in reject
+ *		strqspn(s,q,isunescape) find matching " or ' in quoted string
  *		unescape_url(url,isescape), x2c(what)   xlate %xx url-encoded
  *	PART3	=========== Rasterize an Expression (recursively) ===========
  *		--- here's the primary entry point for all of mimeTeX ---
@@ -181,6 +185,7 @@
  *		rastinput(expression,size,basesp,arg1,arg2,arg3)       \input
  *		rastcounter(expression,size,basesp,arg1,arg2,arg3)   \counter
  *		rasteval(expression,size,basesp,arg1,arg2,arg3)         \eval
+ *		rastmathtex(expression,size,basesp,arg1,arg2,arg3)   \mathtex
  *		rasttoday(expression,size,basesp,arg1,arg2,arg3)       \today
  *		rastcalendar(expression,size,basesp,arg1,arg2,arg3) \calendar
  *		rastenviron(expression,size,basesp,arg1,arg2,arg3)   \environ
@@ -217,6 +222,8 @@
  *		aalookup(gridnum)     table lookup for all possible 3x3 grids
  *		aalowpasslookup(rp,bytemap,grayscale)   driver for aalookup()
  *		aasupsamp(rp,aa,sf,grayscale)             or by supersampling
+ *		imgsupsamp(rp,sf,grayscale)supersampling to shrink rp->pixmap
+ *		ssweights(width,height,maxwt,wts)build canonical ss wt matrix
  *		aacolormap(bytemap,nbytes,colors,colormap)make colors,colormap
  *		aaweights(width,height)      builds "canonical" weight matrix
  *		aawtpixel(image,ipixel,weights,rotate) weight image at ipixel
@@ -399,7 +406,7 @@
  * 11/15/11	J.Forkosh	Version 1.73 released.
  * 02/15/12	J.Forkosh	Version 1.74 released.
  * 12/28/16	J.Forkosh	Version 1.75 released.
- * 04/23/17	J.Forkosh	Most recent revision (also see REVISIONDATE)
+ * 06/10/17	J.Forkosh	Most recent revision (also see REVISIONDATE)
  * See  http://www.forkosh.com/mimetexchangelog.html  for further details.
  *
  ****************************************************************************/
@@ -408,7 +415,7 @@
 Program id
 -------------------------------------------------------------------------- */
 #define	VERSION "1.75"			/* mimeTeX version number */
-#define REVISIONDATE "23 Apr. 2017"	/* date of most recent revision */
+#define REVISIONDATE "10 June 2017"	/* date of most recent revision */
 #define COPYRIGHTTEXT "Copyright(c) 2002-2017, John Forkosh Associates, Inc"
 
 /* -------------------------------------------------------------------------
@@ -418,7 +425,9 @@ header files and macros
 #include <stdio.h>
 #include <stdlib.h>
 /*#include <unistd.h>*/
+#define	_GNU_SOURCE			/* for strcasestr() in string.h */
 #include <string.h>
+char	*strcasestr();			/* non-standard extension */
 #include <ctype.h>
 #include <math.h>
 #include <time.h>
@@ -725,6 +734,16 @@ other variables
 #ifndef	HOST_SHOWAD
   #define HOST_SHOWAD "\000"		/* show ads on all hosts */
 #endif
+/* --- mathTeX info for \mathtex{} directive --- */
+#if !defined(MATHTEX)			/* localhost:// or http://url/ */
+  #define MATHTEX "localhost://mathtex.cgi"
+#endif
+#if !defined(MATHTEXPWD)		/* mathTeX \password{} */
+  #define MATHTEXPWD "\000"
+#endif
+#if !defined(WGET)			/* local /path/to/wget */
+  #define WGET "wget"
+#endif
 /* --- "smash" margin (0 means no smashing) --- */
 #if !defined(SMASHMARGIN)
   #if defined(NOSMASH)
@@ -887,6 +906,9 @@ GLOBAL(int,msglevel,MSGLEVEL);		/* message level for verbose/debug */
 GLOBAL(int,errorstatus,ERRORSTATUS);	/* exit status if error encountered*/
 GLOBAL(int,exitstatus,0);		/* exit status (0=success) */
 STATIC	FILE *msgfp;			/* output in command-line mode */
+/* --- logging macros --- */
+#define	logdump(lvl,msg)  if(msglevel>=(lvl)) {logmsg(msg);}else
+#define	logmsg(msg) if(1) {logger(msgfp,msglevel,(msg),NULL);}else
 /* --- embed warnings in rendered expressions, [\xxx?] if \xxx unknown --- */
 #if defined(WARNINGS)
   #define WARNINGLEVEL WARNINGS
@@ -991,6 +1013,21 @@ static STORE mimestore[MAXSTORE] = {
   } ; /* --- end-of-mimestore[] --- */
 
 /* -------------------------------------------------------------------------
+other application global data
+-------------------------------------------------------------------------- */
+/* --- getdirective() global data --- */
+static	int  argformat   = 0;		/* 111... if arg not {}-enclosed */
+static	int  optionalpos = 0;		/* # {args} before optional [args] */
+static	int  noptional   = 0;		/* # optional [args] found */
+static	char optionalargs[10][128] =	/* buffer for optional args */
+  { "\000", "\000", "\000", "\000", "\000", "\000", "\000", "\000" };
+/* --- **dump/debug** data --- */
+int	isdumpgif = 0;			/* **debug** dump gif image */
+#if !defined(DUMPGIF)
+  #define DUMPGIF "dumpgif"		/* use .gif_dumpgif extension */
+#endif
+
+/* -------------------------------------------------------------------------
 miscellaneous macros
 -------------------------------------------------------------------------- */
 #if 0	/* --- these are now #define'd in mimetex.h --- */
@@ -1042,6 +1079,13 @@ miscellaneous macros
 #define	strsqueezep(s,t) if(!isempty((s))&&!isempty((t))) { \
 	int sqlen=strlen((s))-strlen((t)); \
 	if (sqlen>0 && sqlen<=999) {strsqueeze((s),sqlen);} } else
+/* --- skip/find whitespace (from mathtex.c for getdirective()) --- */
+#define	findwhite(thisstr)  while ( !isempty(thisstr) ) \
+	if ( isthischar(*(thisstr),WHITESPACE) ) break; else (thisstr)++
+	/* thisstr += strcspn(thisstr,WHITESPACE) */
+/* --- skip \command (i.e., find char past last char of \command) --- */
+#define	skipcommand(thisstr)  while ( !isempty(thisstr) ) \
+	if ( !isalpha(*(thisstr)) ) break; else (thisstr)++
 
 /* ---
  * PART2
@@ -1491,8 +1535,8 @@ for ( irow=0; irow<height; irow++ ) {
         int jrow = (int)(urot->y + midrow + dy); /* rotated row */
         int jcol = (int)(urot->x + midcol + dx); /* rotated col */
         if ( jrow>=0 && jrow<height	/* check rotated pixel coords */
-        &&   jcol>=0 && jcol<width )	/* rotated pixel in bounds */
-          setpixel(rotp,jrow,jcol,pixval); /* rotated pixel in place */
+        &&   jcol>=0 && jcol<width ) {	/* rotated pixel in bounds */
+          setpixel(rotp,jrow,jcol,pixval); } /* rotated pixel in place */
         } /* --- end-of-if(urot!=NULL) --- */
     } /* --- end-of-for(icol) --- */
   } /* --- end-of-for(irow) --- */
@@ -3987,6 +4031,126 @@ end_of_job:
     fclose(fp);				/* so close file before returning */
   return ( (isokay?nbytes:0) );		/*back to caller with #bytes written*/
 } /* --- end-of-function type_pbmpgm() --- */
+
+
+/* ==========================================================================
+ * Function:	read_pbm ( fp, sf )
+ * Purpose:	read already-opened file (or pipe) containing pbm,
+ *		and return subraster corresponding to its bitmap image
+ * --------------------------------------------------------------------------
+ * Arguments:	fp (I)		FILE *ptr to already-opened file or pipe
+ *				(the latter for \mathtex{} and maybe others)
+ *		sf (I)		double containing "shrink factor" .01<sf<.99
+ *				to be applied to image
+ * --------------------------------------------------------------------------
+ * Returns:	( subraster * )	ptr to subraster representing image of pbm
+ *				or NULL for any error.
+ * --------------------------------------------------------------------------
+ * Notes:     o
+ * ======================================================================= */
+/* --- entry point --- */
+subraster *read_pbm ( FILE *fp, double sf )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+subraster *new_subraster(), *sp = NULL;	/* subraster corresponding to pbm */
+raster	*rp = NULL;			/* sp->image raster in subraster */
+raster	*ssrp=NULL, *imgsupsamp();	/* supersampled/shrunk rp */
+int	delete_subraster(),		/* in case of problem/error */
+	delete_raster();		/* in case we shrink/supersample rp */
+unsigned char *pixels = NULL;		/* pixels returned in pbm image */
+char	fline[8192],			/* fgets(fline,8190,fp) buffer */
+	*lineptr=NULL, *endptr=NULL;	/* strtol ptr to 1st char after num*/
+char	*magicnumber = "P1";		/* filetype identification */
+int	gotmagic = 0;			/* set true when magicnumber found */
+int	ncols=0, nrows=0,		/* image width,height from wget */
+	jcol=0, irow=0,			/* col~width, row~height indexes */
+	ipixel=0, npixels=0,		/* pixel index, npixels=ncols*nrows */
+	pixval=0;			/* pixval=strtol() from pipeline */
+int	pixsz = 1,			/* bitmap in returned raster's pixmap*/
+	ssgrayscale = 2; /*256;*/	/* grayscale for imgsupsamp() */
+/* ---
+ * check input
+ * -------------- */
+if ( fp == NULL ) goto end_of_job;
+/* ---
+ * read the first few lines to get width, height
+ * ------------------------------------------------ */
+while ( 1 ) {				/* read lines (shouldn't find eof) */
+  if ( fgets(fline,8190,fp) == NULL ) goto end_of_job; /* premature eof */
+  if ( gotmagic ) {			/* next line has "width height" */
+    char *p = strchr(fline,(int)('#')); /* first look for comment char */
+    if ( p != (char *)NULL ) *p = '\000'; /* and terminate line at comment */
+    p = fline;  skipwhite(p);		/* now find first non-whitespace char*/
+    if ( *p == '\000' ) continue;	/* and skip empty lines */
+    ncols = (int)strtol(fline,&endptr,10); /* convert width */
+    nrows = (int)strtol(endptr,NULL,10); /* and convert height */
+    break; }				/* and we're ready to pixelize... */
+  if ( strstr(fline,magicnumber) != NULL ) /* found magicnumber */
+    gotmagic = 1;			/* set flag */
+  } /* --- end-of-while(1) --- */
+/* ---
+ * allocate pixels and xlate remainder of pipe
+ * ---------------------------------------------- */
+/* --- allocate pixels --- */
+npixels = nrows*ncols;			/* that's what we need */
+if ( npixels<1 || npixels>9999999 ) goto end_of_job; /* sanity check */
+if ( (pixels = (unsigned char *)malloc(npixels)) /*ask for it if not insane*/
+==   NULL ) goto end_of_job;		/* and quit if request denied */
+/* --- xlate remainder of pipe --- */
+ipixel = 0;				/* start with first pixel */
+while ( 1 ) {				/* read lines (shouldn't find eof) */
+  /* --- read next line --- */
+  if ( fgets(fline,511,fp) == NULL ) {	/* premature eof */
+    free(pixels);  pixels=NULL;		/* failed to xlate completely */
+    goto end_of_job; }			/* free, reset return ptr, quit */
+  /* --- xlate 0's and 1's on the line --- */
+  lineptr = fline;			/* start at beginning of line */
+  while ( ipixel < npixels ) {
+    while ( *lineptr != '\000' )	/* skip leading non-digits */
+      if ( isdigit(*lineptr) ) break;	/* done at first digit */
+      else lineptr++;			/* or skip leading non-digit */
+    if ( *lineptr == '\000' ) break;	/* no more numbers on this line */
+    pixval = (int)strtol(lineptr,&endptr,10); /*convert next num to 0 or 1*/
+    pixels[ipixel++] = (unsigned char)pixval; /*i.e., let's hope it's 0 or 1*/
+    lineptr = endptr;			/* move on to next number */
+    } /* --- end-of-while(ipixels<npixels) --- */
+  if ( ipixel >= npixels ) break;	/* pixelized image complete */
+  } /* --- end-of-while(1) --- */
+/* ---
+ * create subraster for pixelized image
+ * --------------------------------------- */
+if ( (sp = new_subraster(ncols,nrows,pixsz)) /* allocate/init subraster */
+==   NULL ) goto end_of_job;		/* or quit if failed */
+if ( (rp = sp->image)			/* image raster in new subraster */
+==   NULL ) {				/* apparently some internal problem */
+  delete_subraster(sp);			/* free "buggy" subraster */
+  sp=NULL; goto end_of_job; }		/* return error to caller */
+sp->type = IMAGERASTER;			/* set raster type as image */
+sp->baseline = (nrows+1)/2;		/* default baseline at image center */
+sp->toprow = sp->leftcol = 0;		/* init/unused */
+ipixel = 0;				/* start with first pixel */
+/* --- copy 0/1 pixels from pbm to sp->image raster --- */
+for ( irow=0; irow<nrows; irow++ )	/* for each row, top-to-bottom */
+  for ( jcol=0; jcol<ncols; jcol++ ) {	/* for each col, left-to-right */
+    pixval = (int)pixels[ipixel++];	/* pbm image stored row-wise */
+    setpixel(rp,irow,jcol,pixval);	/* set corresponding value in image */
+    } /* --- end-of-for(irow,jcol) --- */
+/* --- apply sf (shrink factor) if requested --- */
+if ( sf>0.01 && sf<0.99 ) {		/* valid sf means shrink requested */
+  if ( (ssrp = imgsupsamp(rp,sf,ssgrayscale)) /* supersample rp to shrink it */
+  != NULL ) {				/* succeeded, so replace rp with ssrp*/
+    /* printf("read_pbm> imgsupsamp() succeeded\n"); */
+    sp->image = ssrp;			/* replaced rp with ssrp */
+    sp->baseline = (int)( (sf*((double)nrows)+1.0)/2.0 + 0.5 );
+    delete_raster(rp); }		/* free no-longer-needed rp */
+  /* else printf("read_pbm> imgsupsamp() failed\n"); */
+  } /* --- end-of-if(sf>.01&&sf<.99) --- */
+end_of_job:
+  if ( pixels != NULL ) free((void *)pixels); /* raster's pixmap has image */
+  return ( sp );			/*back to caller with pbm subraster*/
+} /* --- end-of-function read_pbm() --- */
 
 
 /* ==========================================================================
@@ -6827,6 +6991,7 @@ end_of_job:
 } /* --- end-of-function findbraces() --- */
 
 
+#if 0  /* --- enhanced version from mathtex below --- */
 /* ==========================================================================
  * Function:	strpspn ( char *s, char *reject, char *segment )
  * Purpose:	finds the initial segment of s containing no chars
@@ -6895,6 +7060,7 @@ end_of_job:
     trimwhite(segment); }		/* trim leading/trailing whitespace*/
   return ( ps );			/* back to caller */
 } /* --- end-of-function strpspn() --- */
+#endif
 
 
 /* ==========================================================================
@@ -7168,6 +7334,385 @@ if ( store[istore].value != NULL ) /* address of int supplied */
 end_of_job:
   return ( value );			/* store->values[istore] or NULL */
 } /* --- end-of-function getstore() --- */
+
+
+/* ==========================================================================
+ * Function:	getdirective(string, directive, iscase, isvalid, nargs, args)
+ * Purpose:	Locates the first \directive{arg1}...{nargs} in string,
+ *		returns arg1...nargs in args[],
+ *		and removes \directive and its args from string.
+ * --------------------------------------------------------------------------
+ * Arguments:	string (I/0)	char * to null-terminated string from which
+ *				the first occurrence of \directive will be
+ *				interpreted and removed
+ *		directive (I)	char * to null-terminated string containing
+ *				the \directive to be interpreted in string
+ *		iscase (I)	int containing 1 if match of \directive
+ *				in string should be case-sensitive,
+ *				or 0 if match is case-insensitive.
+ *		isvalid (I)	int containing validity check option:
+ *				0=no checks, 1=must be numeric
+ *		nargs (I)	int containing (maximum) number of
+ *				{args} following \directive, or 0 if none.
+ *		args (O)	void * interpreted as (char *) if nargs=1
+ *				to return the one and only arg,
+ *				or interpreted as (char **) if nargs>1
+ *				to array of returned arg strings
+ * --------------------------------------------------------------------------
+ * Returns:	( char * )	ptr to first char after removed \directive, or
+ *				NULL if \directive not found, or any error.
+ * --------------------------------------------------------------------------
+ * Notes:     o	If optional [arg]'s are found, they're stored in the global
+ *		optionalargs[] buffer, and the noptional counter is bumped.
+ *	      o	set global argformat's decimal digits for each arg,
+ *		e.g., 1357... means 1 for 1st arg, 3 for 2nd, 5 for 3rd, etc.
+ *		0 for an arg is the default format (i.e., argformat=0),
+ *		and means it's formatted as a LaTeX {arg} or [arg].
+ *		1 for an arg means arg terminated by first non-alpha char
+ *		2 means arg terminated by {   (e.g., as for /def)
+ *		8 means arg terminated by first whitespace char
+ * ======================================================================= */
+/* --- entry point --- */
+char	*getdirective ( char *string, char *directive,
+	int iscase, int isvalid, int nargs, void *args )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+int	iarg = (-1);			/* init to signal error */
+char	*pfirst = NULL,			/* ptr to 1st char of directive */
+	*plast = NULL,			/* ptr past last char of last arg */
+	*plbrace=NULL, *prbrace=NULL;	/* ptr to left,right brace of arg */
+int	fldlen = 0;			/* #chars between { and } delims */
+char	argfld[512];			/* {arg} characters */
+int	nfmt=0, /*isnegfmt=0,*/		/* {arg} format */
+	argfmt[9]={0,0,0,0,0,0,0,0,0};	/* argformat digits */
+int	gotargs = (args==NULL?0:1);	/* true if args array supplied */
+int	isdalpha = 1;			/* true if directive ends with alpha*/
+char	*strpspn(char *s,char *reject,char *segment); /*non-() not in rej*/
+#if 0 /* --- declared globally above --- */
+/* ---
+ * mathtex global variables (not used by mimetex)
+ * ------------------------------------------------- */
+int	noptional = 0;
+char	optionalargs[10][32];
+int	argformat = 0;
+int	optionalpos = 0;
+#endif
+/* -------------------------------------------------------------------------
+Find first \directive in string
+-------------------------------------------------------------------------- */
+noptional = 0;				/* no optional [args] yet */
+for ( iarg=0; iarg<8; iarg++ )		/* for each one... */
+  *optionalargs[iarg] = '\000';		/* re-init optional [arg] buffer */
+if ( argformat != 0 ) {			/* have argformat */
+  int	myfmt = argformat;		/* local copy */
+  if ( myfmt < 0 ) { /*isnegfmt=1;*/ myfmt=(-myfmt); } /* check sign */
+  while ( myfmt>0 && nfmt<9 ) {		/* have more format digits */
+    argfmt[nfmt] = myfmt%10;		/* store low-order decimal digit */
+    myfmt /= 10;			/* and shift it out */
+    nfmt++; }				/* count another format digit */
+  } /* --- end-of-if(argformat!=0) --- */
+if ( isempty(directive) ) goto end_of_job; /* no input \directive given */
+if ( !isalpha((int)(directive[strlen(directive)-1])) )isdalpha=0;/*not alpha*/
+pfirst = string;			/* start at beginning of string */
+while ( 1 ) {				/* until we find \directive */
+  if ( !isempty(pfirst) )		/* still have string from caller */
+    pfirst =				/* ptr to 1st char of directive */
+     (iscase>0? strstr(pfirst,directive): /* case-sensistive match */
+      strcasestr(pfirst,directive));	/* case-insensistive match */
+  if ( isempty(pfirst) ) {		/* \directive not found in string */
+    pfirst = NULL;			/* signal \directive not found */
+    goto end_of_job; }			/* quit, signalling error to caller*/
+  plast = pfirst + strlen(directive);	/*ptr to fist char past directive*/
+  if ( !isdalpha || !isalpha((int)(*plast)) ) break; /* found \directive */
+  pfirst = plast;			/* keep looking */
+  plast = NULL;				/* reset plast */
+  } /* --- end-of-while(1) --- */
+if ( nargs < 0 ) {			/* optional [arg] may be present */
+  nargs = -nargs;			/* flip sign back to positive */
+  /*noptional = 1;*/ }			/* and set optional flag */
+/* -------------------------------------------------------------------------
+Get arguments
+-------------------------------------------------------------------------- */
+iarg = 0;				/* no args yet */
+if ( nargs > 0 )			/* \directive has {args} */
+  while ( iarg < nargs+noptional ) {	/* get each arg */
+    int karg = iarg-noptional;		/* non-optional arg index */
+    int kfmt = (nfmt<=karg?0:argfmt[nfmt-karg-1]); /* arg format digit */
+    /* --- find left { and right } arg delimiters --- */
+    plbrace = plast;			/*ptr to fist char past previous arg*/
+    skipwhite(plbrace);			/* push it to first non-white char */
+    if ( isempty(plbrace) ) break;	/* reached end-of-string */
+    /* --- check LaTeX for single-char arg or {arg} or optional [arg] --- */
+    if ( kfmt == 0 ) {			/* interpret LaTeX {arg} format */
+     if ( !isthischar(*plbrace,(iarg==optionalpos+noptional?"{[":"{")) ) {
+      /* --- single char argument --- */
+      plast = plbrace + 1;		/* first char after single-char arg*/
+      argfld[0] = *plbrace;		/* arg field is this one char */
+      argfld[1] = '\000'; }		/* null-terminate field */
+     else {				/* have {arg} or optional [arg] */
+      /* note: to use for validation, need robust {} match like strpspn() */
+      if ( (prbrace = strchr(plbrace,(*plbrace=='{'?'}':']'))) /*right }or]*/
+      ==   NULL ) break;		/*and no more args if no right brace*/
+      if ( 1 )				/* true to use strpspn() */
+	prbrace = strpspn(plbrace,NULL,NULL); /* push to matching } or ] */
+      plast = prbrace + 1;		/* first char after right brace */
+      /* --- extract arg field between { and } delimiters --- */
+      fldlen = (int)(prbrace-plbrace) - 1; /* #chars between { and } delims*/
+      if ( fldlen >= 256 ) fldlen=255;	/* don't overflow argfld[] buffer */
+      if ( fldlen > 0 )			/* have chars in field */
+        memcpy(argfld,plbrace+1,fldlen); /*copy field chars to local buffer*/
+      argfld[fldlen] = '\000';		/* and null-terminate field */
+      trimwhite(argfld);		/* trim whitespace from argfld */
+      } /* --- end-of-if/else(!isthischar(*plbrace,...)) --- */
+     } /* --- end-of-if(kfmt==0) --- */
+    /* --- check plain TeX for arg terminated by whitespace --- */
+    if ( kfmt != 0 ) {			/* interpret plain TeX arg format */
+     char *parg = NULL;			/* ptr into arg, used as per kfmt */
+     plast = plbrace;			/* start at first char of arg */
+     if ( *plast == '\\' ) plast++;	/* skip leading \command backslash */
+     /* --- interpret arg according to its format --- */
+     switch ( kfmt ) {
+       case 1:
+       default: skipcommand(plast); break; /* push ptr to non-alpha char */
+       case 2: parg = strchr(plast,'{'); /* next arg always starts with { */
+	if ( parg != NULL ) plast=parg; else plast++; /* up to { or 1 char */
+	break;
+       case 8: findwhite(plast); break;	/*ptr to whitespace after last char*/
+       } /* --- end-of-switch(kfmt) --- */
+     /* --- extract arg field --- */
+     fldlen = (int)(plast-plbrace);	/* #chars between in field */
+     if ( fldlen >= 256 ) fldlen=255;	/* don't overflow argfld[] buffer */
+     if ( fldlen > 0 )			/* have chars in field */
+       memcpy(argfld,plbrace,fldlen);	/*copy field chars to local buffer*/
+     argfld[fldlen] = '\000';		/* and null-terminate field */
+     if ( 1 ) { trimwhite(argfld); }	/* trim whitespace from argfld */
+     } /* --- end-of-if(kfmt!=0) --- */
+    if ( isvalid != 0 ) {		/* argfld[] validity check desired */
+     if ( isvalid == 1 ) {		/* numeric check wanted */
+       int validlen = strspn(argfld," +-.0123456789"); /*very simple check*/
+       argfld[validlen] = '\000'; }	/* truncate invalid chars */
+     } /* --- end-of-if(isvalid!=0) --- */
+    /* --- store argument field in caller's array --- */
+    if ( kfmt==0 && *plbrace=='[' ) {	/*store [arg] as optionalarg instead*/
+     if ( noptional < 8 ) {		/* don't overflow our buffer */
+       strninit(optionalargs[noptional],argfld,254); } /*copy to optionalarg*/
+     noptional++; }			/* count another optional [arg] */
+    else				/*{args} returned in caller's array*/
+     if ( gotargs ) {			/*caller supplied address or array*/
+      if ( nargs < 2 )			/*just one arg, so it's an address*/ 
+        strcpy((char *)args,argfld);	/* so copy arg field there */
+      else {				/* >1 arg, so it's a ptr array */
+	char *argptr = ((char **)args)[karg]; /* arg ptr in array of ptrs */
+	if ( argptr != NULL )		/* array has iarg-th address */
+	  strcpy(argptr,argfld);	/* so copy arg field there */
+	else gotargs = 0; } }		/* no more addresses in array */
+    /* --- completed this arg --- */
+    iarg++;				/* bump arg count */
+    } /* --- end-of-while(iarg<nargs) --- */
+/* -------------------------------------------------------------------------
+Back to caller
+-------------------------------------------------------------------------- */
+end_of_job:
+  if ( 1 ) argformat = 0;		/* always/never reset global arg */
+  if ( 1 ) optionalpos = 0;		/* always/never reset global arg */
+  if ( pfirst!=NULL && plast!=NULL )	/* have directive field delims */
+    {strsqueeze(pfirst,((int)(plast-pfirst)));} /* squeeze out directive */
+  return ( pfirst );			/* ptr to 1st char after directive */
+} /* --- end-of-function getdirective() --- */
+
+
+/* ==========================================================================
+ * Function:	strpspn ( char *s, char *reject, char *segment )
+ * Purpose:	finds the initial segment of s containing no chars
+ *		in reject that are outside (), [] and {} parens, e.g.,
+ *		   strpspn("abc(---)def+++","+-",segment) returns
+ *		   segment="abc(---)def" and a pointer to the first '+' in s
+ *		because the -'s are enclosed in () parens.
+ * --------------------------------------------------------------------------
+ * Arguments:	s (I)		(char *)pointer to null-terminated string
+ *				whose initial segment is desired
+ *		reject (I)	(char *)pointer to null-terminated string
+ *				containing the "reject chars"
+ *				If reject contains a " or a ', then the
+ *				" or ' isn't itself a reject char,
+ *				but other reject chars within quoted
+ *				strings (or substrings of s) are spanned.
+ *		segment (O)	(char *)pointer returning null-terminated
+ *				string comprising the initial segment of s
+ *				that contains non-rejected chars outside
+ *				(),[],{} parens, i.e., all the chars up to
+ *				but not including the returned pointer.
+ *				(That's the entire string if no non-rejected
+ *				chars are found.)
+ * --------------------------------------------------------------------------
+ * Returns:	( char * )	pointer to first reject-char found in s
+ *				outside parens, or a pointer to the
+ *				terminating '\000' of s if there are
+ *				no reject chars in s outside all () parens.
+ *				But if reject is empty, returns pointer
+ *				to matching )]} outside all parens.
+ * --------------------------------------------------------------------------
+ * Notes:     o	the return value is _not_ like strcspn()'s
+ *	      o	improperly nested (...[...)...] are not detected,
+ *		but are considered "balanced" after the ]
+ *	      o	if reject not found, segment returns the entire string s
+ *	      o	but if reject is empty, returns segment up to and including
+ *		matching )]}
+ *	      o	leading/trailing whitespace is trimmed from returned segment
+ * ======================================================================= */
+/* --- entry point --- */
+char	*strpspn ( char *s, char *reject, char *segment )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+char	*ps = s;			/* current pointer into s */
+char	*strqspn(char *s,char *q,int isunescape); /*span quoted string*/
+char	qreject[256]="\000", *pq=qreject, *pr=reject; /*find "or' in reject*/
+int	isqspan = 0;			/* true to span quoted strings */
+int	depth = 0;			/* () paren nesting level */
+int	seglen=0, maxseg=2047;		/* segment length, max allowed */
+int	isescaped=0, checkescapes=1;	/* signals escaped chars */
+/* -------------------------------------------------------------------------
+initialization
+-------------------------------------------------------------------------- */
+/* --- check arguments --- */
+if ( isempty(s)				/* no input string supplied */
+/*||   isempty(reject)*/ ) goto end_of_job; /* no reject chars supplied */
+/* --- set up qreject w/o quotes --- */
+if ( !isempty(reject) )			/* have reject string from caller */
+  while ( *pr != '\000' ) {		/* until end-of-reject string */
+    if ( !isthischar(*pr,"\"\'") )	/* not a " or ' */
+      *pq++ = *pr;			/* copy actual reject char */
+    else isqspan = 1;			/* span rejects in quoted strings */
+    pr++; }				/* next reject char from caller */
+*pq = '\000';				/* null-terminate qreject */
+/* -------------------------------------------------------------------------
+find first char from s outside () parens (and outside ""'s) and in reject
+-------------------------------------------------------------------------- */
+while ( *ps != '\000' ) {		/* search till end of input string */
+  int spanlen = 1;			/*span 1 non-reject, non-quoted char*/
+  if ( !isescaped ) {			/* ignore escaped \(,\[,\{,\),\],\}*/
+    if ( isthischar(*ps,"([{") ) depth++;   /* push another paren */
+    if ( isthischar(*ps,")]}") ) depth--; } /* or pop another paren */
+  if ( depth < 1 ) {			/* we're outside all parens */
+    if ( isqspan )			/* span rejects in quoted strings */
+      if ( isthischar(*ps,"\"\'") ) {	/* and we're at opening quote */
+        pq = strqspn(ps,NULL,0);	/* locate matching closing quote */
+        if ( pq != ps )			/* detected start of quoted string */
+         if ( *pq == *ps )		/* and found closing quote */
+          spanlen = ((int)(pq-ps)) + 1; } /* span the entire quoted string */
+    if ( isempty(qreject) ) break;	/* no reject so break immediately */
+    if ( isthischar(*ps,qreject) ) break; } /* only break on a reject char */
+  if ( checkescapes )			/* if checking escape sequences */
+    isescaped = (*ps=='\\'?1:0);	/* reset isescaped signal */
+  if ( segment != NULL ) {		/* caller gave us segment */
+    int copylen = min2(spanlen,maxseg-seglen); /* don't overflow segment */
+    if ( copylen > 0 )			/* have room in segment buffer */
+      memcpy(segment+seglen,ps,copylen); } /* so copy non-reject chars */
+  seglen += spanlen;  ps += spanlen;	/* bump to next char */
+  } /* --- end-of-while(*ps!=0) --- */
+end_of_job:
+  if ( segment != NULL ) {		/* caller gave us segment */
+    if ( isempty(qreject) && !isempty(s) ) { /* no reject char */
+      segment[min2(seglen,maxseg)] = *ps;  seglen++; } /*closing )]} to seg*/
+    segment[min2(seglen,maxseg)] = '\000'; /* null-terminate the segment */
+    trimwhite(segment); }		/* trim leading/trailing whitespace*/
+  return ( ps );			/* back to caller */
+} /* --- end-of-function strpspn() --- */
+
+
+/* ==========================================================================
+ * Function:	strqspn ( char *s, char *q, int isunescape )
+ * Purpose:	finds matching/closing " or ' in quoted string
+ *		that begins with " or ', and optionally changes
+ *		escaped quotes to unescaped quotes.
+ * --------------------------------------------------------------------------
+ * Arguments:	s (I)		(char *)pointer to null-terminated string
+ *				that begins with " or ',
+ *		q (O)		(char *)pointer returning null-terminated
+ *				quoted token, with or without outer quotes,
+ *				and with or without escaped inner quotes
+ *				changed to unescaped quotes, depending
+ *				on isunescape.
+ *		isunescape (I)	int containing 1 to change \" to " if s
+ *				is "quoted" or change \' to ' if 'quoted',
+ *				or containing 2 to change both \" and \'
+ *				to unescaped quotes.  Other \sequences aren't
+ *				changed.  Note that \\" emits \".
+ *				isunescape=0 makes no changes at all.
+ *				Note: the following not implemented yet --
+ *				If unescape is negative, its abs() is used,
+ *				but outer quotes aren't included in q.
+ * --------------------------------------------------------------------------
+ * Returns:	( char * )	pointer to matching/closing " or '
+ *				(or to char after quote if isunescape<0),
+ *				or terminating '\000' if none found,
+ *				or unchanged (same as s) if not quoted string
+ * --------------------------------------------------------------------------
+ * Notes:     o
+ * ======================================================================= */
+/* --- entry point --- */
+char	*strqspn ( char *s, char *q, int isunescape )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+char	*ps = s,  *pq = q;		/* current pointer into s, q */
+char	quote = '\000';			/* " or ' quote character */
+int	qcopy = (isunescape<0?0:1);	/* true to copy outer quotes */
+int	isescaped = 0;			/* true to signal \escape sequence */
+int	maxqlen = 2400;			/* max length of returned q */
+/* -------------------------------------------------------------------------
+Initialization
+-------------------------------------------------------------------------- */
+/* --- check args --- */
+if ( s == NULL ) goto end_of_job;	/* no string supplied */
+skipwhite(ps);				/* skip leading whitespace */
+if ( *ps == '\000'			/* string exhausted */
+||   (!isthischar(*ps,"\"\'")) ) {	/* or not a " or ' quoted string */
+  ps = s;  goto end_of_job; }		/*signal error/not string to caller*/
+if ( isunescape < 0 ) isunescape = (-isunescape); /* flip positive */
+/* --- set quote character --- */
+quote = *ps;				/* set quote character */
+if ( qcopy && q!=NULL ) *pq++ = quote;	/* and copy it to output token */
+/* -------------------------------------------------------------------------
+span characters between quotes
+-------------------------------------------------------------------------- */
+while ( *(++ps) != '\000' ) {		/* end-of-string always terminates */
+  /* --- process escaped chars --- */
+  if ( isescaped ) {			/* preceding char was \ */
+    if ( *ps != '\\' ) isescaped = 0;	/* reset isescaped flag unless \\ */
+    if ( q != NULL ) {			/* caller wants quoted token */
+      if ( isunescape==0		/* don't unescape anything */
+      ||   (isunescape==1 && *ps!=quote) /* escaped char not our quote */
+      ||   (isunescape==2 && (!isthischar(*ps,"\"\'"))) ) /* not any quote */
+        if ( --maxqlen > 0 )		/* so if there's room in token */
+          *pq++ = '\\';			/*keep original \ in returned token*/
+      if ( !isescaped )			/* will have to check 2nd \ in \\ */
+        if ( --maxqlen > 0 )		/* if there's room in token */
+          *pq++ = *ps; }		/* put escaped char in token */
+    continue; }				/* go on to next char in string */
+  /* --- check if next char escaped --- */
+  if ( *ps == '\\' ) {			/* found escape char */
+    isescaped=1; continue; }		/*set flag and process escaped char*/
+  /* --- check for unescaped closing quote --- */
+  if ( *ps == quote ) {			/* got an unescaped quote */
+    if ( qcopy && q!=NULL ) *pq++ = quote; /* copy it to output token */
+    if ( 0 && !qcopy ) ps++;		/* return ptr to char after quote */
+    goto end_of_job; }			/* back to caller */
+  /* --- process other chars --- */
+  if ( q != NULL )			/* caller want token returned */
+    if ( --maxqlen > 0 )		/* and there's still room in token */
+      *pq++ = *ps;			/* put char in  token */
+  } /* --- end-of-while(*(++ps)!='\000') --- */
+/*ps = NULL;*/  /*pq = q;*/		/* error if no closing quote found */
+end_of_job:
+  if ( q != NULL ) *pq = '\000';	/* null-terminate returned token */
+  return ( ps );			/* return ptr to " or ', or NULL */
+} /* --- end-of-function strqspn() --- */
 
 
 /* ==========================================================================
@@ -11967,9 +12512,13 @@ subraster *rastinput ( char **expression, int size, subraster *basesp,
 Allocations and Declarations
 -------------------------------------------------------------------------- */
 char	*texsubexpr(), tag[1024]="\000", filename[1024]="\000"; /* args */
-subraster *rasterize(), *inputsp=NULL; /* rasterized input image */
+subraster *rasterize(), *inputsp=NULL, /* rasterized input image */
+	*read_pbm();		/* read .pbm file and make subraster image */
 int	status, rastreadfile();	/* read input file */
-int	format=0, npts=0;	/* don't reformat (numerical) input */
+FILE	*fp=NULL, *rastopenfile(); /* reading .pbm files locally */
+int	format=0, npts=0,	/* don't reformat (numerical) input */
+	ispbm = 0;		/* set true for \input[pbm]{filename.pbm} */
+double	sf = 0.0;		/* shrink factor (0 or 1 means don't shrink)*/
 int	isinput = (seclevel<=inputseclevel?1:0); /*true if \input permitted*/
 /*int	evalterm();*/		/* evaluate expressions */
 char	*inputpath = INPUTPATH;	/* permitted \input{} paths for any user */
@@ -11988,7 +12537,11 @@ if ( *(*expression) == '[' )		/* check for []-enclosed value */
       {	format = 1;			/* signal dtoa()/dbltoa() format */
 	if ( (reformat=strchr(reformat,'=')) != NULL ) /* have dtoa= */
 	  npts = (int)strtol(reformat+1,NULL,0); } /* so set npts */
-    if ( format == 0 ) {		/* reformat not requested */
+    if ( (reformat=strstr(argfld,"pbm")) != NULL ) /*input a .pbm image file*/
+      { ispbm = 1;			/* set ispbm flag */
+	if ( (reformat=strchr(reformat,',')) != NULL ) /* have pbm, */
+	  sf = strtod(reformat+1,NULL); } /* so set sf(shrinkfactor) */
+    if ( format==0 && !ispbm ) {	/* not reformat request, and not pbm */
       strninit(tag,argfld,1020); } }	/* so interpret arg as tag */
 /* --- parse for {filename} arg, and bump expression past it --- */
 *expression = texsubexpr(*expression,filename,1020,"{","}",0,0);
@@ -12012,6 +12565,14 @@ if ( ++ninputcmds > 8 )			/* max \input's per expression */
 Read file (and convert to numeric if [dtoa] option was given)
 -------------------------------------------------------------------------- */
 if ( isinput ) {			/* user permitted to use \input{} */
+  if ( ispbm ) {			/* special case: input a .pbm file */
+    fp = rastopenfile(filename,"r");	/* open the .pbm file for "r"ead */
+    if ( fp != NULL ) {			/* opened .pbm file successfully */
+      if(0) printf("rastinput> sf=%.3f to read_pbm(%s,sf)\n",sf,filename);
+      inputsp = read_pbm(fp,sf);	/* create subraster image from .pbm */
+      fclose(fp); }			/* close file after reading */
+    goto end_of_job;			/* all done, return inputsp to caller*/
+    } /* --- end-of-if(ispbm) --- */
   status = rastreadfile(filename,0,tag,subexpr); /* read file */
   if ( *subexpr == '\000' ) goto end_of_job;   /* quit if problem */
   /* --- rasterize input subexpression  --- */
@@ -12250,7 +12811,8 @@ rasterize_counter:
  *		arg2 (I)	int unused
  *		arg3 (I)	int unused
  * --------------------------------------------------------------------------
- * Returns:	( subraster * )	subraster ptr to date stamp
+ * Returns:	( subraster * )	subraster ptr to image of eval-uated
+ *				expression
  * --------------------------------------------------------------------------
  * Notes:     o
  * ======================================================================= */
@@ -12283,6 +12845,102 @@ evalsp = rasterize(subexpr,size);	/* rasterize evaluated expression */
 end_of_job:
   return ( evalsp );			/* return evaluated expr to caller */
 } /* --- end-of-function rasteval() --- */
+
+
+/* ==========================================================================
+ * Function:	rastmathtex ( expression, size, basesp, arg1, arg2, arg3 )
+ * Purpose:	handle \mathtex...
+ *		  ...obtain pixel image corresponding to expression
+ *		by "calling" mathtex, using wget,
+ *		for pbm-style bitmap of expression,
+ *		and then pixelizing it, and wrapping it in a subraster.
+ * --------------------------------------------------------------------------
+ * Arguments:	expression (I/O) char **  to first char of null-terminated
+ *				string immediately following \mathtex,
+ *				and returning ptr immediately
+ *				following last character processed.
+ *		size (I)	int containing 0-11 default font size
+ *				(unused, but passed for consistency)
+ *		basesp (I)	subraster *  to character (or subexpression)
+ *				immediately preceding \mathtex
+ *				(unused, but passed for consistency)
+ *		arg1 (I)	int unused
+ *		arg2 (I)	int unused
+ *		arg3 (I)	int unused
+ * --------------------------------------------------------------------------
+ * Returns:	( subraster * )	subraster ptr to image of pixelized
+ *				pbm bitmap of expression returned by mathtex
+ * --------------------------------------------------------------------------
+ * Notes:     o	Adapted from function
+ *		BYTE *plainmimetext(char *expression, int *width, int *height)
+ *		in gifsave89.c
+ * ======================================================================= */
+/* ---
+ * entry point
+ * -------------- */
+subraster *rastmathtex ( char **expression, int size, subraster *basesp,
+			int arg1, int arg2, int arg3 )
+{
+/* ---
+ * allocations and declarations
+ * ------------------------------- */
+/* --- for mimetex --- */
+char	*texsubexpr(), subexpr[MAXSUBXSZ]; /* arg to be evaluated */
+subraster *read_pbm(), *mathtexsp=NULL;	/* rasterize mathtex'ed expression */
+/* --- for wget() pipe to mathtex --- */
+char	command[2048],			/* complete popen(command,"r") */
+	execwget[1024];			/* wget either mimetex or mathtex */
+FILE	*wget  = NULL;			/* wget's stdout */
+char	*localhost="localhost://", *plocalhost=NULL; /*check if running local*/
+char	*mathtexpwd = MATHTEXPWD;	/* mathTeX \password{} */
+/* ---
+ * initialization
+ * ----------------- */
+/* --- Parse for subexpr for mathtex, and bump expression past it ---*/
+*expression = texsubexpr(*expression,subexpr,0,"{","}",0,0);
+if ( *subexpr == '\000' )		/* couldn't get subexpression */
+  goto end_of_job;			/* nothing to do, so quit */
+/* ---
+ * set up wget command for webservice
+ * ------------------------------------- */
+strcpy( execwget,			/* --- mathTeX webservice --- */
+	WGET				/*...begins with /path/to/wget */
+	" -q -O - "			/*...followed by wget options */
+	"\"" MATHTEX "?\\pbm" );	/*..."mathtex.cgi?\pbm\dpi{400} */
+if ( !isempty(mathtexpwd) ) {		/* need \password{} ??? */
+  strcat(execwget,"\\password{");	/* start with \password{ */
+  strcat(execwget,mathtexpwd);		/* then actual mathtex password */
+  strcat(execwget,"}"); }		/* and closing } */
+strcat(execwget," ");			/* blank space if message needs it */
+/* ---
+ * open pipe to wget (or run locally)
+ * ------------------------------------- */
+/* --- first construct popen() command using execwget --- */
+strcpy(command,execwget);		/* shell command plus mimetex url */
+strcat(command,subexpr);		/* followed by \mathtex{subexpr} */
+strcat(command,"\"");			/* and closing " */
+/* --- then check for local mathTeX executable --- */
+if ( (plocalhost=strstr(MATHTEX,localhost)) /* does url have localhost://? */
+!=   NULL ) {				/* if so, replace wget */
+  strcpy(command,plocalhost+strlen(localhost)); /*path follows localhost://*/
+  strcat(command," \"\\pbm\\stdout ");	/* start with "\pbm\stdout */
+  strcat(command,subexpr);		/* followed by \mathtex{subexpr} */
+  strcat(command,"\"");			/* and closing " */
+  } /* --- end-of-if(plocalhost!=NULL) --- */
+/* --- issue wget command and capture its stdout --- */
+if ( (wget = popen(command,"r"))	/* issue command and capture stdout*/
+== NULL ) goto end_of_job;		/* or quit if failed */
+/* ---
+ * create subraster for pixelized image
+ * --------------------------------------- */
+mathtexsp = read_pbm(wget,0.0);
+/* ---
+ * end-of-job
+ * ------------- */
+end_of_job:
+  if ( wget != NULL ) pclose(wget);	/* close pipe (if open) */
+  return ( mathtexsp );			/* back with mathtex subraster */
+} /* --- end-of-function rastmathtex() --- */
 
 
 /* ==========================================================================
@@ -15380,6 +16038,208 @@ end_of_job:
 
 
 /* ==========================================================================
+ * Function:	imgsupsamp ( rp, sf, grayscale )
+ * Purpose:	calculates a supersampled image of rp->pixmap,
+ *		shrunk by 0<(double)sf<1, with each byte 0...grayscale-1
+ * --------------------------------------------------------------------------
+ * Arguments:	rp (I)		raster *  to image to be super-sampled
+ *		sf (I)		double containing supersampling shrinkfactor
+ *				( 0.001 <= sf <= 0.999 )
+ *		grayscale (I)	int containing number of grayscales
+ *				to be calculated, 0...grayscale-1
+ *				(typically given as 2 or 256)
+ * --------------------------------------------------------------------------
+ * Returns:	( raster * )	ptr to supersampled raster, NULL=any error
+ * --------------------------------------------------------------------------
+ * Notes:     o	If the center point of the box being averaged is black,
+ *		then the entire "average" is forced black (grayscale-1)
+ *		regardless of the surrounding points.  This is my attempt
+ *		to avoid a "washed-out" appearance of thin (one-pixel-wide)
+ *		lines, which would otherwise turn from black to a gray shade.
+ * ======================================================================= */
+/* --- entry point --- */
+raster	*imgsupsamp (raster *rp, double sf, int grayscale)
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+raster	*ssp=NULL, *new_raster();	/* new raster for returned ss */
+int	rpheight=rp->height, rpwidth=rp->width, /* rp raster dimensions */
+	ssheight=0, sswidth=0,		/* supersampled dimensions */
+	wtheight=0, wtwidth=0;		/* weight matrix dimensions */
+int	iss=0, jss=0;			/* ss indexes, i=width j=height */
+int	delete_raster();		/* delete stale sswts rasters */
+int	maxwt=10, ssweights();		/* weight matrix applied to rp */
+static	raster *sswts = NULL;		/* ssweights() resultant matrix */
+static	double prevsf = 0.0;		/* shrinkfactor from previous call */
+static	int sumwts = 0;			/* sum of weights */
+int	maxssval=(-9999),		/* max grayscale set in ss */
+	isrescalemax = (grayscale>4?1:0), /* 1=rescale maxssval to grayscale*/
+	minwtfrac=10, maxwtfrac=70;	/* force light pts white, dark black*/
+	/*grayfrac=20, blackfrac=40; */	/* force black if this many pts are */
+int	blackfrac = 30;			/* supersamp density (lower=darker) */
+int	sspixsz = (grayscale>2?8:1);	/* pixsz = 1,8 for returned raster */
+/* -------------------------------------------------------------------------
+Initialization
+-------------------------------------------------------------------------- */
+/* --- check args --- */
+if (  rp == NULL			/* no ptr to input arg */
+   || sf<0.001 || sf>0.999		/* invalid shrink factor */
+   || grayscale<2 || grayscale>256	/* invalid grayscale */
+   ) goto end_of_job;			/* quit if invalid request */
+/* --- supersamp raster dimensions --- */
+ssheight = (int)(((double)rpheight)*sf + 0.5); /* shrink height by sf */
+sswidth  = (int)(((double)rpwidth)*sf  + 0.5); /* shrink width  by sf */
+if ( ssheight<1 || sswidth<1 ) goto end_of_job; /* shrunk too much */
+/* --- weight matrix dimensions --- */
+wtheight = max2(3.0,(1.0/sf));		/* at least 3x3-point averaging */
+wtheight = 1 + (wtheight/2)*2;		/* and always an odd number */
+wtwidth  = wtheight;			/* same (for now) */
+/* --- get weight matrix (or use current one) --- */
+if ( absval(sf-prevsf) > 0.00001 ) {	/* have new sf shrink factor */
+  if (sswts!=NULL) delete_raster(sswts); /* free previous weight matrix */
+  sswts = NULL;				/* let ssweights() re-alloc */
+  if ( (sumwts = ssweights(wtwidth,wtheight,maxwt,&sswts)) /*new wt matrix*/
+  < 0 ) goto end_of_job;		/* failed to build new weights */
+  prevsf = sf; }			/* save new shrink factor */
+/* --- allocate output raster */
+if ( (ssp = new_raster(sswidth,ssheight,sspixsz)) /* alloc output raster */
+==   NULL ) goto end_of_job;		/* quit if alloc fails */
+/* -------------------------------------------------------------------------
+Step through each pixel of ssp, sampling corresponding submatrix of rp
+-------------------------------------------------------------------------- */
+for ( jss=0; jss<ssheight; jss++ )	/* rows to ssp j=height */
+ for ( iss=0; iss<sswidth; iss++ ) {	/* cols to ssp i=width */
+  int jrp = (int)(((double)(jss+1))/sf), /* corresponding rp row */
+      irp = (int)(((double)(iss+1))/sf); /* corresponding rp col */
+  int iwt=0, jwt=0,			/* sswts indexes, i=width j=height */
+      iwt0=(wtwidth/2), jwt0=(wtheight/2); /* center point of sswts */
+  int ssval=0;				/* weighted rpvals */
+  int nrp=0, mrp=0;			/* #rp bits set, #within matrix */
+  setpixel(ssp,jss,iss,0);		/* init val in supersamp raster */
+  /* --- accumulate weighted value of rp pixels --- */
+  for ( jwt=0; jwt<wtheight; jwt++ )
+   for ( iwt=0; iwt<wtwidth; iwt++ ) {
+    int i=irp+iwt-iwt0, j=jrp+jwt-jwt0;	/* rp raster point indexes */
+    if ( i>=0 && i<rpwidth		/* i within rp raster bounds */
+    &&   j>=0 && j<rpheight ) {		/* ditto j */
+      mrp++;				/* count another bit within matrix */
+      if ( (int)(getpixel(rp,j,i))	/* get actual pixel value */
+      != 0 ) {				/* pixel is set/black */
+        nrp++;				/* count another pixel set */
+        ssval += (int)(getpixel(sswts,jwt,iwt)); } } /* sum weights */
+    } /* --- end-of-for(iwt)/for(jwt) --- */
+  /* --- set weighted value in ss raster --- */
+  if ( ssval > 0 ) {			/*normalize and rescale non-zero val*/
+    int ssfrac = (100*ssval)/sumwts;	/* weighted percent of black points */
+    if( (100*nrp)/mrp >= blackfrac	/* high number of black interior pts*/
+    || ssfrac >= maxwtfrac )		/* high weight of sampled black pts */
+      ssval = grayscale-1;		/* so set supersampled pt black */
+    else if( ssfrac <= minwtfrac )	/* low weight of sampledblack pts */
+      ssval = 0;			/* so set supersampled pt white */
+    else				/* rescale calculated weight */
+      ssval = ((grayscale-1)*ssval + ((sumwts/2)-1))/sumwts;
+    setpixel(ssp,jss,iss,ssval);	/*weighted val in supersamp raster*/
+    maxssval = max2(maxssval,ssval); }	/* largest sval so far */
+  } /* --- end-of-for(iss)/for(jss) --- */
+/* ---
+ * rescale supersampled image so darkest points become black
+ * ------------------------------------------------------------ */
+if ( isrescalemax ) {			/* flag set to rescale maxaaval */
+  double scalef = ((double)(grayscale-1))/((double)maxssval);
+  for ( jss=0; jss<ssheight; jss++ )	/* height */
+   for ( iss=0; iss<sswidth; iss++ ) {	/* width */
+     int ssfrac, ssval = getpixel(ssp,jss,iss); /* un-rescaled value */
+     ssval = (int)(0.5+((double)ssval)*scalef); /*multiply by scale factor*/
+     ssfrac = (100*ssval)/(grayscale-1); /* fraction of blackness */
+     if( ssfrac >= blackfrac )		/* high weight of sampledblack pts */
+       ssval = grayscale-1;		/* so set supersampled pt black */
+     else if( 0&&ssfrac <= minwtfrac )	/* low weight of sampledblack pts */
+       ssval = 0;			/* so set supersampled pt white */
+     setpixel(ssp,jss,iss,ssval); }	/* replace rescaled val in raster */
+  } /* --- end-of-if(isrescalemax) --- */
+/* -------------------------------------------------------------------------
+Back to caller with supersampled image
+-------------------------------------------------------------------------- */
+end_of_job:
+  return ( ssp );
+} /* --- end-of-function imgsupsamp() --- */
+
+
+/* ==========================================================================
+ * Function:	ssweights ( width, height, maxwt, wts )
+ *		Build "canonical" supersampling weight matrix,
+ *		width x height, with maximum maxwt, in raster wts
+ *		(see Notes below for discussion).
+ * --------------------------------------------------------------------------
+ * Arguments:	width (I)	int containing width (#cols) of returned
+ *				raster/matrix wts of weights
+ *		height (I)	int containing height (#rows) of returned
+ *				raster/matrix wts of weights
+ *		maxwt (I)	int containing maximum weight allowed
+ *		wts (O)		raster ** returning calculated weights
+ *				(if *wts==NULL, a new_raster() of
+ *				width x height is allocated, and
+ *				caller must delete_raster() it when done)
+ * --------------------------------------------------------------------------
+ * Returns:	( int )		sum of all width*height weights,
+ *				or -1 for any error
+ * --------------------------------------------------------------------------
+ * Notes:     o For example, given width=7, height=5, builds the matrix
+ *			1 2 3  4 3 2 1
+ *			2 4 6  8 6 4 2
+ *			3 6 9 12 9 6 3
+ *			2 4 6  8 6 4 2
+ *			1 2 3  4 3 2 1
+ *		If an even dimension given, the two center numbers stay
+ *		the same, e.g., 123321 for the top row if width=6.
+ *	      o	For an odd square n x n matrix, the sum of all n^2
+ *		weights will be ((n+1)/2)^4.
+ *	      o	The largest weight (in raster of bytes) is 255,
+ *		so the largest square matrix is 31 x 31.  Any weight that
+ *		tries to grow beyond 255 is held constant at 255.
+ * ======================================================================= */
+/* --- entry point --- */
+int	ssweights ( int width, int height, int maxwt, raster **wts )
+{
+/* -------------------------------------------------------------------------
+Allocations and Declarations
+-------------------------------------------------------------------------- */
+int	irow=0, icol=0,			/* height, width indexes */
+	weight = 0,			/*running weight, as per Notes above*/
+	totwt = (-1);			/* sum of weights in wts */
+int	ssalgorithm = 99;		/* maybe for later use */
+raster	*new_raster();			/* if caller wants wts allocated */
+/* -------------------------------------------------------------------------
+Initialization
+-------------------------------------------------------------------------- */
+/* --- check args --- */
+if ( width<1 || height<1 || maxwt<1 ) goto end_of_job; /* bad args */
+maxwt = min2(maxwt,255);		/* 255 is maximum weight allowed */
+if ( wts ==  NULL ) goto end_of_job;	/* no raster address supplied */
+if ( *wts == NULL )			/* caller wants wts allocated */
+  if ( (*wts = new_raster(width,height,8)) /* caller must delete_raster() */
+  == NULL ) goto end_of_job;		/* quit if alloc failed */
+/* -------------------------------------------------------------------------
+Fill weight matrix, as per Notes above
+-------------------------------------------------------------------------- */
+totwt = 0;				/* reset sum */
+for ( irow=0; irow<height; irow++ )	/* outer loop over rows */
+  for ( icol=0; icol<width; icol++ ) {	/* inner loop over cols */
+    int	jrow = height-irow-1,		/* backwards irow, height-1,...,0 */
+	jcol =  width-icol-1;		/* backwards icol,  width-1,...,0 */
+    weight = min2(irow+1,jrow+1) * min2(icol+1,jcol+1); /* set weight */
+    weight = min2(maxwt,weight);	/* clamp weight */
+    if ( ssalgorithm == 1 ) weight=1;	/* force equal weights */
+    setpixel(*wts,irow,icol,weight);	/* store weight in raster matrix */
+    totwt += weight;			/* accumulate sum of weights */
+    } /* --- end-of-for(irow,icol) --- */
+end_of_job:
+  return ( totwt );			/* back with sum of wts or -1=error */
+} /* --- end-of-function ssweights() --- */
+
+
+/* ==========================================================================
  * Function:	aacolormap ( bytemap, nbytes, colors, colormap )
  * Purpose:	searches bytemap, returning a list of its discrete values
  *		in ascending order in colors[], and returning an "image"
@@ -15831,6 +16691,8 @@ int	/*isquery = 0, (now global)*/	/* true if input from QUERY_STRING */
 	isinmemory = 1,			/* true to generate image in memory*/
 	isdumpimage = 0,		/* true to dump image on stdout */
 	isdumpbuffer = 0;		/* true to dump to memory buffer */
+char	*getdirective(), argstring[256],/*look for control \directive's, etc*/
+	*pdirective = NULL;		/* ptr to char after \directive */
 /* --- rasterization --- */
 subraster *rasterize(), *sp=NULL;	/* rasterize expression */
 raster	*border_raster(), *bp=NULL;	/* put a border around raster */
@@ -15850,6 +16712,7 @@ struct	{ char *referer; int msgnum; }	/* http_referer can't contain this */
 	#endif
 	{ NULL, -999 } };		/* trailer */
 char	*http_referer = getenv("HTTP_REFERER"), /* referer using mimeTeX */
+	*remote_addr  = getenv("REMOTE_ADDR"), /* ip address of referer */
 	*http_host    = getenv("HTTP_HOST"), /* http host for mimeTeX */
 	*server_name  = getenv("SERVER_NAME"), /* server hosting mimeTeX */
 	*referer_match = (!isempty(http_host)?http_host: /*match http_host*/
@@ -15867,7 +16730,7 @@ int	norefmaxlen = NOREFMAXLEN;	/*max query_string len if no referer*/
 char	*gif_outfile = (char *)NULL,	/* gif output defaults to stdout */
 	gif_buffer[MAXGIFSZ] = "\000",	/* or gif written in memory buffer */
 	cachefile[256] = "\000",	/* full path and name to cache file*/
-	*md5str();			/* md5 has of expression */
+	*md5hash=NULL, *md5str();	/* md5 hash of expression */
 int	maxage = 7200;			/* max-age is two hours */
 int	valign = (-9999);		/*Vertical-Align:baseline-(height-1)*/
 /* --- pbm/pgm (-g switch) --- */
@@ -16075,6 +16938,10 @@ if ( !isquery				/* don't have an html query string */
      { pbm_outfile = gif_outfile;	/* use -e switch file for pbm/pgm */
        gif_outfile = (char *)NULL;	/* reset gif output file */
        /*isdumpimage--;*/ }		/* and decrement -e count */
+ /* ---
+  * permit \input, etc in command-line mode
+  * ------------------------------------------ */
+ inputseclevel = (99999);		/* \input allowed */
  } /* --- end-of-if(!isquery) --- */
 /* ---
  * check for <form> input
@@ -16093,6 +16960,7 @@ if ( isquery ) {			/* must be <form method="get"> */
     isformdata = 1; }			/* set flag to signal form data */
  else /* --- query, but not <form> input --- */
     unescape_url(expression,0); }	/* convert _all_ %xx's to chars */
+md5hash = md5str(expression);		/* md5 hash of unedited expression */
 /* ---
  * check queries for prefixes/suffixes/embedded that might cause problems
  * ---------------------------------------------------------------------- */
@@ -16103,32 +16971,55 @@ if ( lastchar(expression) == '\\' )	/* last char is backslash */
  * check queries for embedded prefixes signalling special processing
  * ----------------------------------------------------------------- */
 if ( isquery )				/* only check queries */
- {
- /* --- check for msglevel=###$ prefix --- */
- if ( !memcmp(expression,"msglevel=",9) ) /* query has msglevel prefix */
-   { char *delim=strchr(expression,'$'); /* find $ delim following msglevel*/
+  {
+  if ( getdirective(expression,"\\dumpgif",1,0,1,argstring)/*\dumpgif{level}*/
+  !=   NULL ) {				/* found \dumpgif{level} */
+    isdumpgif = atoi(argstring);	/* interpret arg as isdumpgif value */
+    if ( isdumpgif>1 ) { *logfile = '\000'; /* default logfile for dumpgif */
+      if ( !isempty(cachepath) ) strcat(logfile,cachepath);
+      strcat(logfile,DUMPGIF); strcat(logfile,".txt");
+      if ( msglevel < LOGLEVEL ) msglevel=LOGLEVEL; }
+    } /* --- end-of-if(getdirective("\\dumpgif")!=NULL) --- */
+  if ( 0 ) /* --- done by getdirective() immediately above --- */
+    if ( strstr(expression,"\\dumpgif")  != NULL ) { /* debug dump gif image*/
+      char *dumpgif = strstr(expression,"\\dumpgif"); /* ptr to \dumpgif */
+      strsqueeze(dumpgif,strlen("\\dumpgif")); /* get rid of \dumpgif */
+      isdumpgif = 1; }			/* set flag to dump gif image */
+  if ( getdirective(expression,"\\msglevel",1,0,1,argstring)/*\msglevel{lev}*/
+  !=   NULL ) {				/* found \msglevel{level} */
+    if ( 1 || (seclevel<=9) )		/* permit msglevel specification */
+      msglevel = atoi(argstring); }	/* interpret msglevel */
+  if ( getdirective(expression,"\\logfile",1,0,1,argstring) /*\logfile{file}*/
+  !=   NULL ) {				/* found \logfile{file} */
+    if ( 1 || (seclevel<=3) )		/* permit logfile specification */
+      strcpy(logfile,argstring); }	/* copy \logfile{filename} */
+  if ( 0 ) { /* --- done by getdirective()'s immediately above --- */
+    /* --- check for msglevel=###$ prefix --- */
+    if ( !memcmp(expression,"msglevel=",9) ) { /* query has msglevel prefix */
+     char *delim=strchr(expression,'$'); /* find $ delim following msglevel*/
      if ( delim != (char *)NULL )	/* check that we found delim */
       {	*delim = '\000';		/* replace delim with null */
 	if ( seclevel <= 9 )		/* permit msglevel specification */
 	  msglevel = atoi(expression+9); /* interpret ### in msglevel###$ */
 	strsqueezep(expression,delim+1); } } /* squeeze out prefix & delim */
- /* --- next check for logfile=xxx$ prefix (must follow msglevel) --- */
- if ( !memcmp(expression,"logfile=",8) ) /* query has logfile= prefix */
-   { char *delim=strchr(expression,'$'); /* find $ delim following logfile=*/
-     if ( delim != (char *)NULL )	/* check that we found delim */
-      {	*delim = '\000';		/* replace delim with null */
-	if ( seclevel <= 3 )		/* permit logfile specification */
-	  strcpy(logfile,expression+8);	/* interpret xxx in logfile=xxx$ */
-	strsqueezep(expression,delim+1); } } /* squeeze out prefix & delim */
- } /* --- end-of-if(isquery) --- */
+    /* --- next check for logfile=xxx$ prefix (must follow msglevel) --- */
+    if ( !memcmp(expression,"logfile=",8) ) { /* query has logfile= prefix */
+      char *delim=strchr(expression,'$'); /* find $ delim following logfile=*/
+      if ( delim != (char *)NULL )	/* check that we found delim */
+       { *delim = '\000';		/* replace delim with null */
+	 if ( seclevel <= 3 )		/* permit logfile specification */
+	   strcpy(logfile,expression+8); /* interpret xxx in logfile=xxx$ */
+	 strsqueezep(expression,delim+1); } } /* squeeze out prefix & delim */
+    } /* --- end-of-if(0) --- */
+  } /* --- end-of-if(isquery) --- */
+
 /* ---
  * log query (e.g., for debugging)
  * ------------------------------- */
 if ( isquery )				/* only log query_string's */
- if ( msglevel >= LOGLEVEL		/* check if logging */
+ if ( (msglevel >= LOGLEVEL)		/* check if logging */
  &&   seclevel <= 5 )			/* and if logging permitted */
-  if ( logfile != NULL )		/* if a logfile is given */
-   if ( *logfile != '\000' ) {		/*and if it's not an empty string*/
+  if ( !isempty(logfile) ) {		/* if a logfile is given */
     if ( (msgfp=fopen(logfile,"a"))	/* open logfile for append */
     !=   NULL )				/* ignore logging if can't open */
      {
@@ -16171,7 +17062,7 @@ if ( isquery )				/* only log query_string's */
 	#endif /* --- DUMPENVIRON ---*/
       } /* --- end-of-if(msglevel>=9) --- */
      /* --- close log file if no longer needed --- */
-     if ( msglevel < DBGLEVEL )		/* logging, but not debugging */
+     if ( (msglevel<DBGLEVEL) && !isdumpgif ) /*logging, but not debugging*/
       {	fprintf(msgfp,"%s\n",dashes);	/* so log separator line, */
 	fclose(msgfp);			/* close logfile immediately, */
 	msgfp = NULL; }			/* and reset msgfp pointer */
@@ -16215,7 +17106,7 @@ if ( isquery				/* not relevant if "interactive" */
    if ( ishttpreferer )			/* or called "standalone" */
     if ( !isstrstr(http_referer,referer,0) ) { /* invalid http_referer */
       expression = invalid_referer_msg; /* so give user error message */
-      isinvalidreferer = 1; } }		/* and signal invalid referer */
+      isinvalidreferer = 10; } }	/* and signal invalid referer */
  else					/* compiled without -DREFERER= */
   if ( reflevels > 0 ) {		/*match referer unless -DREFLEVELS=0*/
    /* --- check topmost levels of http_referer against http_host --- */
@@ -16225,7 +17116,7 @@ if ( isquery				/* not relevant if "interactive" */
      strcpy(exprbuffer,invalid_referer_match); /* init error message */
      strreplace(exprbuffer,"SERVER_NAME", /* and then replace SERVER_NAME */
        strdetex(urlprune(referer_match,reflevels),1),0);/*with referer_match*/
-     isinvalidreferer = 1; }		/* and signal invalid referer */
+     isinvalidreferer = 20; }		/* and signal invalid referer */
    } /* --- end-of-if(reflevels>0) --- */
  } /* --- end-of-if(isquery&&!ispassword) --- */
 if ( isquery ) {			/* not relevant if "interactive" */
@@ -16249,7 +17140,7 @@ if ( isquery				/* not relevant if "interactive" */
    if ( strstr(referer,"month") != NULL ) /* month check requested */
     if ( !ismonth(progname) )		/* not executed as mimetexJan-Dec */
      { expression = invalid_referer_msg; /* so give user error message */
-       isinvalidreferer = 1; }		/* and signal invalid referer */
+       isinvalidreferer = 30; }		/* and signal invalid referer */
 /* ---
  * check if http_referer is to be denied access
  * -------------------------------------------- */
@@ -16278,13 +17169,13 @@ if ( isquery				/* not relevant if "interactive" */
     if ( msgnum >= 0 ) {		/* deny access to this referer */
       if ( msgnum > maxmsgnum ) msgnum = 0; /* keep index within bounds */
       expression = msgtable[msgnum];	/* set user error message */
-      isinvalidreferer = 1; }		/* and signal invalid referer */
+      isinvalidreferer = 40; }		/* and signal invalid referer */
   } /* --- end-of-if(!isinvalidreferer) --- */
 /* --- also check maximum query_string length if no http_referer given --- */
 if ( isquery				/* not relevant if "interactive" */
 &&   !ispassword )			/* nor if user supplied password */
  if ( !isinvalidreferer )		/* nor if already invalid referer */
-  if ( !ishttpreferer )			/* no http_referer supplied */
+  if ( !ishttpreferer ) {		/* no http_referer supplied */
    if ( strlen(expression) > norefmaxlen ) { /* query_string too long */
     if ( isempty(referer_match) )	/* no referer_match to display */
      expression = invalid_referer_msg;	/* set invalid http_referer message*/
@@ -16292,7 +17183,11 @@ if ( isquery				/* not relevant if "interactive" */
      strcpy(exprbuffer,invalid_referer_match); /* init error message */
      strreplace(exprbuffer,"SERVER_NAME", /* and then replace SERVER_NAME */
        strdetex(urlprune(referer_match,reflevels),1),0); } /*with host_http*/
-     isinvalidreferer = 1; }		/* and signal invalid referer */
+     isinvalidreferer = 50; }		/* and signal invalid referer */
+   } /* --- end-of-if(!ishttpreferer) --- */
+if ( isdumpgif ) {
+  sprintf(argstring,"isinvalidreferer=%d\n",isinvalidreferer);
+  logdump(0,argstring); }
 /* ---
  * check for "advertisement"
  * ------------------------- */
@@ -16330,7 +17225,7 @@ if ( isquery )				/* don't cache command-line images */
  if ( iscaching )			/* image caching enabled */
   {
   /* --- set up path to cached image file --- */
-  char *md5hash = md5str(expression);	/* md5 hash of expression */
+  /*char *md5hash = md5str(expression);*/ /*md5 hash of unedited expression*/
   if ( md5hash == NULL )		/* failed for some reason */
     iscaching = 0;			/* so turn off caching */
   else
@@ -16351,8 +17246,7 @@ if ( isquery )				/* don't cache command-line images */
    /* --- log caching request --- */
    if ( msglevel >= 1			/* check if logging */
    /*&&   seclevel <= 5*/ )		/* and if logging permitted */
-    if ( cachelog != NULL )		/* if a logfile is given */
-     if ( *cachelog != '\000' )		/*and if it's not an empty string*/
+    if ( !isempty(cachelog) )		/* if a logfile is given */
       { char filename[256];		/* construct cachepath/cachelog */
         FILE *filefp=NULL;		/* fopen(filename) */
         strcpy(filename,cachepath);	/* start with (relative) path */
@@ -16363,8 +17257,7 @@ if ( isquery )				/* don't cache command-line images */
 	   fprintf(filefp,"%s                 %s\n", /* timestamp, md5 file */
 	    timestamp(TZDELTA,0),cachefile+strlen(cachepath)); /*skip path*/
 	   fprintf(filefp,"%s\n",expression); /* expression in filename */
-	   if ( http_referer != NULL )	/* show referer if we have one */
-	    if ( *http_referer != '\000' )    /* and if not an empty string*/
+	   if ( !isempty(http_referer) ) /* show referer if we have one */
 	      {	int loglen = strlen(dashes);  /* #chars on line in log file*/
 		char *refp = http_referer;    /* line to be printed */
 		isreflogged = 1;	      /* signal http_referer logged*/
@@ -16374,6 +17267,8 @@ if ( isquery )				/* don't cache command-line images */
 		  refp += loglen; } }	      /* bump ptr to next part */
 	   if ( !isreflogged )		      /* http_referer not logged */
 	     fprintf(filefp,"http://none\n"); /* so log dummy referer line */
+	   fprintf(filefp,"remote_addr=%s\n", /* and log ip_address... */
+	     (!isempty(remote_addr)?remote_addr:"None")); /* ...or "None" */
 	   fprintf(filefp,"%s\n",dashes);     /* separator line */
 	   fclose(filefp); }		     /* close logfile immediately */
       } /* --- end-of-if(cachelog!=NULL) --- */
@@ -16846,11 +17741,12 @@ end_of_job:
 
 
 /* ==========================================================================
- * Function:	logger ( fp, msglevel, message, logvars )
+ * Function:	logger ( logfp, msglevel, message, logvars )
  * Purpose:	Logs the environment variables specified in logvars
  *		to fp if their msglevel is >= the passed msglevel.
  * --------------------------------------------------------------------------
- * Arguments:	fp (I)		FILE * to file containing log
+ * Arguments:	logfp (I)	FILE * to file containing log,
+ *				or NULL defaults to global msgfp
  *		msglevel (I)	int containing logging message level
  *		message (I)	char * to optional message, or NULL
  *		logvars (I)	logdata * to array of environment variables
@@ -16862,19 +17758,26 @@ end_of_job:
  * Notes:     o
  * ======================================================================= */
 /* --- entry point --- */
-int	logger ( FILE *fp, int msglevel, char *message, logdata *logvars )
+int	logger ( FILE *logfp, int msglevel, char *message, logdata *logvars )
 {
 /* -------------------------------------------------------------------------
 Allocations and Declarations
 -------------------------------------------------------------------------- */
+FILE	*fp = (logfp!=NULL?logfp:msgfp); /* use caller's logfp, or msgfp */
 int	ilog=0, nlogged=0;		/* logvars[] index, #vars logged */
 char	*timestamp();			/* timestamp logged */
 char	*value = NULL;			/* getenv(name) to be logged */
+static	int  ncalls = 0;		/* #calls (headers on 1st call) */
+static	char *dashes =
+  "------------------------------------------------------------------------";
 /* -------------------------------------------------------------------------
 Log each variable
 -------------------------------------------------------------------------- */
-fprintf(fp,"%s\n",timestamp(TZDELTA,0)); /*emit timestamp before first var*/
-if ( message != NULL )			/* optional message supplied */
+if ( fp == NULL ) goto end_of_job;	/* no output file */
+if ( ++ncalls == 1 ) {			/* headers */
+  fprintf(fp,"%s\n",dashes);
+  fprintf(fp,"%s\n",timestamp(TZDELTA,0)); } /*emit timestamp before 1st var*/
+if ( !isempty(message) )		/* optional message supplied */
  fprintf(fp,"  MESSAGE = %s\n",message); /* emit caller-supplied message */
 if ( logvars != (logdata *)NULL )	/* have logvars */
  for ( ilog=0; logvars[ilog].name != NULL; ilog++ )  /* till end-of-table */
@@ -16886,7 +17789,7 @@ if ( logvars != (logdata *)NULL )	/* have logvars */
      logvars[ilog].name,logvars[ilog].maxlen,value);
     nlogged++;				/* bump #vars logged */
     } /* --- end-of-for(ilog) --- */
-return ( nlogged );			/* back to caller */
+end_of_job: return ( nlogged );		/* back to caller */
 } /* --- end-of-function logger() --- */
 
 
@@ -16966,6 +17869,14 @@ emit bytes from cachefile
 if ( fwrite(buffptr,sizeof(unsigned char),nbytes,emitptr) /* write buffer */
 <    nbytes )				/* failed to write all bytes */
   nbytes = 0;				/* reset total count to 0 */
+if ( isdumpgif && (0 || !isbuffer) ) {	/* **debug** dump gif */
+  char dumpfile[999];  FILE *dumpptr=NULL;
+  strcpy(dumpfile,cachefile);
+  strcat(dumpfile,"_"); strcat(dumpfile,DUMPGIF);
+  if ( (dumpptr=fopen(dumpfile,"wb")) != NULL ) {
+    fwrite(buffptr,sizeof(unsigned char),nbytes,dumpptr);
+    fclose(dumpptr); }
+  } /* --- end-of-if(isdumpgif) --- */
 end_of_job:
   return ( nbytes );			/* back with #bytes emitted */
 } /* --- end-of-function emitcache() --- */

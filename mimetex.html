@@ -148,16 +148,18 @@ Preamble
   function verticalalign( $expression ) {
     global $mimetexurl;
     // note: curl_init() stops at the first whitespace char in $url argument
-    $expression = ereg_replace(" ","~",$expression); // remove whitespace
+    // $expression = preg_replace("{ }","~",$expression); // remove whitespace
     $url     = $mimetexurl . "\depth~" . $expression;
     $valign  = "0";
-    $options = array(
-        CURLOPT_RETURNTRANSFER => true,     // return web page
-        CURLOPT_HEADER         => true);    // return headers
+    $referer = $_SERVER['SERVER_NAME'] . $_SERVER['PHP_SELF']; // works...
+    //$options = array(
+    //    CURLOPT_RETURNTRANSFER => true,     // return web page
+    //    CURLOPT_HEADER         => true);    // return headers
     $ch      = curl_init( $url );
     //curl_setopt_array( $ch, $options );
     curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
     curl_setopt( $ch, CURLOPT_HEADER, true );
+    curl_setopt( $ch, CURLOPT_REFERER, $referer );  // ...seems to work
     $gif     = curl_exec( $ch );
     $errno   = curl_errno( $ch );
     $error   = curl_error( $ch );
@@ -176,8 +178,11 @@ Preamble
     }
   function mimetextag( $label, $expression ) {
     global $mimetexurl;
+    // note: curl_init() stops at the first whitespace char in $url argument
+    $expression = preg_replace("{ }","~",$expression); // remove whitespace
+    $expression = preg_replace("{\n}","~",$expression); // remove newlines
     $valign = verticalalign($expression);
-    $url    = $mimetexurl . $expression;
+    $url    = $mimetexurl . "\depth~" . $expression;
     //echo ' valign=',$valign,' ',"\n";
     echo  '<a href="#preview" class="info"><img id="',$label,'" ';
     echo  ' onclick="eqntext(',"'",$label,"'",')"  ';
@@ -1417,10 +1422,12 @@ Vertical alignment<font size=5>...</font></a> </h3>
     \normalsize f(x)=\int\limits_{-\infty}^xe^{-t^2}dt"
     alt="" border=0 align=middle></a>
     doesn't look as good as the same image
-    <a href="#preview"><img id="imageAV2" onclick="eqntext('imageAV2')"
+    <!-- a href="#preview"><img id="imageAV2" onclick="eqntext('imageAV2')"
     src="../cgi-bin/mimetex.cgi?
     \normalsize f(x)=\int\limits_{-\infty}^xe^{-t^2}dt"
-    alt="" border=0 style="Vertical-Align:-26px"></a>
+    alt="" border=0 style="Vertical-Align:-26px"></a -->
+    <?php mimetextag('imageAV2',
+          '\normalsize f(x)=\int\limits_{-\infty}^xe^{-t^2}dt'); ?>
     that's vertically aligned with your surrounding text.
     Along with several standard 
     <a href="http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html">
@@ -1444,13 +1451,13 @@ Vertical alignment<font size=5>...</font></a> </h3>
    $mimetexurl = "http://www.<i>yourdomain</i>.com/cgi-bin/mimetex.cgi?";
    function verticalalign( $expression ) {
       global $mimetexurl;
-      // note: curl_init() stops at the first whitespace char in $url argument
-      $expression = ereg_replace(" ","~",$expression); // so remove whitespace
       $url     = $mimetexurl . "\depth~" . $expression;
+      $referer = $_SERVER['SERVER_NAME'] . $_SERVER['PHP_SELF'];
       $valign  = "0";
       $ch      = curl_init( $url );
       curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
       curl_setopt( $ch, CURLOPT_HEADER, true );
+      curl_setopt( $ch, CURLOPT_REFERER, $referer );
       $gif     = curl_exec( $ch );
       $errno   = curl_errno( $ch );
       curl_close( $ch );
@@ -1463,6 +1470,9 @@ Vertical alignment<font size=5>...</font></a> </h3>
       }
    function mimetextag( $expression ) {
       global $mimetexurl;
+      // note: curl_init() stops at the first whitespace char in $url argument
+      $expression = preg_replace("{ }","~",$expression); //so remove whitespace
+      $expression = preg_replace("{\n}","~",$expression); // and newlines
       $valign = verticalalign($expression);
       $url    = $mimetexurl . "\depth~" . $expression;
       echo ' &lt;img src="',$url,'" ';
@@ -1474,10 +1484,12 @@ Vertical alignment<font size=5>...</font></a> </h3>
 <p> Now you can write &nbsp;
     &lt;?php&nbsp;mimetextag('\frac12\left(a^2+b^2\right)');&nbsp;?&gt;
     wherever you want to see
-    <a href="#preview"><img id="imageAV5" onclick="eqntext('imageAV5')"
+    <!-- a href="#preview"><img id="imageAV5" onclick="eqntext('imageAV5')"
     src="../cgi-bin/mimetex.cgi?
     \normalsize\frac12\left(a^2+b^2\right)"
-    alt="" border=0 style="Vertical-Align:-7px"></a>
+    alt="" border=0 style="Vertical-Align:-7px"></a -->
+    <?php mimetextag('imageAV5',
+          '\normalsize\frac12\left(a^2+b^2\right)'); ?>
     correctly aligned. Note that the php code automatically
     prepends &nbsp;<b>\depth</b>&nbsp; to your expression for you.
     <!-- Besides making you escape backslashes

@@ -601,6 +601,7 @@ subraster *rastovalbox();		/* handle \ovalbox{expr} */
 subraster *rastinput();			/* handle \input{filename} */
 subraster *rastcounter();		/* handle \counter{filename} */
 subraster *rasteval();			/* handle \eval{expression} */
+subraster *rastmathtex();		/* handle \mathtex{expression} */
 subraster *rasttoday();			/* handle \today[+/-tzdelta,ifmt] */
 subraster *rastcalendar();		/* handle \calendar[yaer,month] */
 subraster *rastenviron();		/* handle \environment */
@@ -696,6 +697,7 @@ STATIC	mathchardef symtable[]
     { "\\ovalbox", NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastovalbox) },
     { "\\input",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastinput) },
     { "\\evaluate",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rasteval) },
+    { "\\mathtex",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastmathtex) },
     { "\\today",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rasttoday) },
     { "\\calendar",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastcalendar) },
     { "\\environment",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastenviron) },
