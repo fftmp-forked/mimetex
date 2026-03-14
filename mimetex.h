@@ -66,7 +66,8 @@ check for compilation by parts (not supported yet)
 #endif
 /* --- declare global symbol --- */
 #ifdef INITVALS
-  #define GLOBAL(type,variable,value) STATIC type variable = (value)
+  #define GLOBAL(type,variable,value) STATIC type variable = value
+  /* #define GLOBAL(type,variable,value) STATIC type variable = (value) */
   /* #define SHARED(type,variable,value) type variable = (value) */
 #else
   #define GLOBAL(type,variable,value) STATIC type variable
@@ -150,7 +151,7 @@ raster
 /* ---
  * associated raster constants and macros
  * -------------------------------------- */
-#define	maxraster 99999			/* max #pixels for raster pixmap */
+#define	maxraster 1048576 /*99999*/	/* max #pixels for raster pixmap */
 /* --- #bytes in pixmap raster needed to contain width x height pixels --- */
 #define	bitmapsz(width,height) (((width)*(height)+7)/8) /*#bytes if a bitmap*/
 #define	pixmapsz(rp) (((rp)->pixsz)*bitmapsz((rp)->width,(rp)->height))
@@ -260,7 +261,8 @@ mathchardef
 #define	PUNCTION	(6)		/* e.g., , (punctuation) */
 #define	VARIABLE	(7)		/* e.g., x    */
 #define	DISPOPER	(8)		/* e.g., Bigint (displaymath opers)*/
-#define	MAXCLASS	(8)		/* just for index checks */
+#define	SPACEOPER	(9)		/* e.g., \hspace{} */
+#define	MAXCLASS	(9)		/* just for index checks */
 #define	UPPERBIG	DISPOPER	/*how to interpret Bigxxx operators*/
 #define	LOWERBIG	DISPOPER	/*how to interpret bigxxx operators*/
 /* --- class aliases --- */
@@ -273,6 +275,8 @@ mathchardef
 #define	CMEX10		(5)		/* math extension */
 #define	RSFS10		(6)		/* rsfs \scrA ... \scrZ */
 #define	BBOLD10		(7)		/* blackboard bold \mathbb A ... */
+#define	STMARY10	(8)		/* stmaryrd math symbols */
+#define	CYR10		(9)		/* cyrillic (wncyr10.mf) */
 #define	NOTACHAR	(99)		/* e.g., \frac */
 /* --- dummy argument value for handlers --- */
 #define	NOVALUE		(-989898)	/*charnum,family,class used as args*/
@@ -282,7 +286,7 @@ mathchardef
  * ----------------------- */
 STATIC	int  nfontinfo			/* legal font#'s are 1...nfontinfo */
 #ifdef INITVALS
-  = 7
+  = 8
 #endif
   ;
 STATIC	struct {char *name; int family; int istext; int class;}
@@ -298,6 +302,7 @@ STATIC	struct {char *name; int family; int istext; int class;}
     { "\\mathbb",  BBOLD10, 0, -1 }, /*(5) \bb,\mathbb{abc}-->{\mathbb~abc}*/
     { "\\mathbf",  CMMIB10, 0, -1 }, /*(6) \bf,\mathbf{abc}-->{\mathbf~abc}*/
     { "\\mathrm",  CMR10,   0, -1 }, /*(7) \mathrm */
+    { "\\cyr",     CYR10,   1, -1 }, /*(8) \cyr (defaults as text mode) */
     {  NULL,	   0,       0,  0 } }
 #endif
   ; /* --- end-of-fonts[] --- */
@@ -331,22 +336,23 @@ aspect ratio is width/height of the displayed image of a pixel
 /* ---
  * space between adjacent symbols, e.g., symspace[RELATION][VARIABLE]
  * ------------------------------------------------------------------ */
-STATIC	int symspace[10][10]
+STATIC	int symspace[11][11]
 #ifdef INITVALS
  =
- { /* ---------------------------------------------------------------
-         Right... ORD OPER  BIN  REL OPEN CLOS PUNC  VAR DISP unused
-    Left... ------------------------------------------------------ */
-  /*ORDINARY*/	{  2,   3,   3,   5,   3,   2,   2,   2,   3,   0 },
-  /*OPERATOR*/	{  3,   1,   1,   5,   3,   2,   2,   2,   3,   0 },
-  /*BINARYOP*/	{  2,   1,   1,   5,   3,   2,   2,   2,   3,   0 },
-  /*RELATION*/	{  5,   5,   5,   5,   5,   5,   5,   5,   5,   0 },
-   /*OPENING*/	{  2,   2,   2,   5,   2,   4,   2,   2,   3,   0 },
-   /*CLOSING*/	{  2,   3,   3,   5,   4,   2,   1,   2,   3,   0 },
-  /*PUNCTION*/	{  2,   2,   2,   5,   2,   2,   1,   2,   2,   0 },
-  /*VARIABLE*/	{  2,   2,   2,   5,   2,   2,   1,   2,   2,   0 },
-  /*DISPOPER*/	{  2,   3,   3,   5,   2,   3,   2,   2,   2,   0 },
-    /*unused*/	{  0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }
+ { /* -----------------------------------------------------------------------
+         Right... ORD OPER  BIN  REL OPEN CLOS PUNC  VAR DISP SPACE unused
+    Left... -------------------------------------------------------------- */
+  /*ORDINARY*/	{  2,   3,   3,   5,   3,   2,   2,   2,   3,   0,    0 },
+  /*OPERATOR*/	{  3,   1,   1,   5,   3,   2,   2,   2,   3,   0,    0 },
+  /*BINARYOP*/	{  2,   1,   1,   5,   3,   2,   2,   2,   3,   0,    0 },
+  /*RELATION*/	{  5,   5,   5,   2,   5,   5,   2,   5,   5,   0,    0 },
+   /*OPENING*/	{  2,   2,   2,   5,   2,   4,   2,   2,   3,   0,    0 },
+   /*CLOSING*/	{  2,   3,   3,   5,   4,   2,   1,   2,   3,   0,    0 },
+  /*PUNCTION*/	{  2,   2,   2,   5,   2,   2,   1,   2,   2,   0,    0 },
+  /*VARIABLE*/	{  2,   2,   2,   5,   2,   2,   1,   2,   2,   0,    0 },
+  /*DISPOPER*/	{  2,   3,   3,   5,   2,   3,   2,   2,   2,   0,    0 },
+ /*SPACEOPER*/	{  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,    0 },
+    /*unused*/	{  0,   0,   0,   0,   0,   0,   0,   0,   0,   0,    0 }
  }
 #endif
  ; /* --- end-of-symspace[][] --- */
@@ -374,7 +380,8 @@ subraster
 #define	CHARASTER	(1)		/* character */
 #define	STRINGRASTER	(2)		/* string of characters */
 #define	IMAGERASTER	(3)		/* image */
-#define	ASCIISTRING	(4)		/* ascii string (not a raster) */
+#define	FRACRASTER	(4)		/* image of \frac{}{} */
+#define	ASCIISTRING	(5)		/* ascii string (not a raster) */
 
 /* ---
  * issue rasterize() call end extract embedded raster from returned subraster
@@ -420,17 +427,19 @@ S t a t i c   F o n t   D a t a   u s e d   b y   M i m e t e x
 STATIC	fontfamily aafonttable[]
 #ifdef INITVALS
  =
- {/* --------------------------------------------------------------------------------
-    family   size=0,       1,       2,       3,       4,       5,       6,       7
-  -------------------------------------------------------------------------------- */
-  {  CMR10,{  cmr83,  cmr100,  cmr118,  cmr131,  cmr160,  cmr180,  cmr210,  cmr250}},
-  { CMMI10,{ cmmi83, cmmi100, cmmi118, cmmi131, cmmi160, cmmi180, cmmi210, cmmi250}},
-  {CMMIB10,{cmmib83,cmmib100,cmmib118,cmmib131,cmmib160,cmmib180,cmmib210,cmmib250}},
-  { CMSY10,{ cmsy83, cmsy100, cmsy118, cmsy131, cmsy160, cmsy180, cmsy210, cmsy250}},
-  { CMEX10,{ cmex83, cmex100, cmex118, cmex131, cmex160, cmex180, cmex210, cmex250}},
-  { RSFS10,{ rsfs83, rsfs100, rsfs118, rsfs131, rsfs160, rsfs180, rsfs210, rsfs250}},
-  {BBOLD10,{bbold83,bbold100,bbold118,bbold131,bbold160,bbold180,bbold210,bbold250}},
-  {   -999,{   NULL,    NULL,    NULL,    NULL,    NULL,    NULL,    NULL,    NULL}}
+ {/* -----------------------------------------------------------------------------------------
+    family     size=0,        1,        2,        3,        4,        5,        6,        7
+  ----------------------------------------------------------------------------------------- */
+  {   CMR10,{   cmr83,   cmr100,   cmr118,   cmr131,   cmr160,   cmr180,   cmr210,   cmr250}},
+  {  CMMI10,{  cmmi83,  cmmi100,  cmmi118,  cmmi131,  cmmi160,  cmmi180,  cmmi210,  cmmi250}},
+  { CMMIB10,{ cmmib83, cmmib100, cmmib118, cmmib131, cmmib160, cmmib180, cmmib210, cmmib250}},
+  {  CMSY10,{  cmsy83,  cmsy100,  cmsy118,  cmsy131,  cmsy160,  cmsy180,  cmsy210,  cmsy250}},
+  {  CMEX10,{  cmex83,  cmex100,  cmex118,  cmex131,  cmex160,  cmex180,  cmex210,  cmex250}},
+  {  RSFS10,{  rsfs83,  rsfs100,  rsfs118,  rsfs131,  rsfs160,  rsfs180,  rsfs210,  rsfs250}},
+  { BBOLD10,{ bbold83, bbold100, bbold118, bbold131, bbold160, bbold180, bbold210, bbold250}},
+  {STMARY10,{stmary83,stmary100,stmary118,stmary131,stmary160,stmary180,stmary210,stmary250}},
+  {   CYR10,{ wncyr83, wncyr100, wncyr118, wncyr131, wncyr160, wncyr180, wncyr210, wncyr250}},
+  {    -999,{    NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL}}
  }
 #endif
  ; /* --- end-of-aafonttable[] --- */
@@ -440,17 +449,19 @@ STATIC	fontfamily aafonttable[]
  STATIC fontfamily ssfonttable[]
  #ifdef INITVALS
   =
-  {/* --------------------------------------------------------------------------------
-     family   size=0,       1,       2,       3,       4,       5,       6,       7
-   -------------------------------------------------------------------------------- */
-   {  CMR10,{ cmr180, cmr1200, cmr1200, cmr1200, cmr1200, cmr1200, cmr1200, cmr1200}},
-   { CMMI10,{cmmi180, cmmi100, cmmi118, cmmi131, cmmi160, cmmi180, cmmi210, cmmi250}},
-   {CMMIB10,{cmmib83,cmmib100,cmmib118,cmmib131,cmmib160,cmmib180,cmmib210,cmmib250}},
-   { CMSY10,{cmsy180, cmsy100, cmsy118, cmsy131, cmsy160, cmsy180, cmsy210, cmsy250}},
-   { CMEX10,{cmex180, cmex100, cmex118, cmex131, cmex160, cmex180, cmex210, cmex250}},
-   { RSFS10,{rsfs180, rsfs100, rsfs118, rsfs131, rsfs160, rsfs180, rsfs210, rsfs250}},
-  {BBOLD10,{bbold180,bbold100,bbold118,bbold131,bbold160,bbold180,bbold210,bbold250}},
-   {   -999,{   NULL,    NULL,    NULL,    NULL,    NULL,    NULL,    NULL,     NULL}}
+  {/* -----------------------------------------------------------------------------------------
+    family     size=0,        1,        2,        3,        4,        5,        6,        7
+   ----------------------------------------------------------------------------------------- */
+   {  CMR10,{  cmr250,  cmr1200,  cmr1200,  cmr1200,  cmr1200,  cmr1200,  cmr1200,  cmr1200}},
+   { CMMI10,{ cmmi250,  cmmi100,  cmmi118,  cmmi131,  cmmi160,  cmmi180,  cmmi210,  cmmi250}},
+   {CMMIB10,{cmmib250, cmmib100, cmmib118, cmmib131, cmmib160, cmmib180, cmmib210, cmmib250}},
+   { CMSY10,{ cmsy250,  cmsy100,  cmsy118,  cmsy131,  cmsy160,  cmsy180,  cmsy210,  cmsy250}},
+   { CMEX10,{ cmex250,  cmex100,  cmex118,  cmex131,  cmex160,  cmex180,  cmex210,  cmex250}},
+   { RSFS10,{ rsfs250,  rsfs100,  rsfs118,  rsfs131,  rsfs160,  rsfs180,  rsfs210,  rsfs250}},
+  { BBOLD10,{bbold250, bbold100, bbold118, bbold131, bbold160, bbold180, bbold210, bbold250}},
+ {STMARY10,{stmary250,stmary100,stmary118,stmary131,stmary160,stmary180,stmary210,stmary250}},
+  {   CYR10,{ wncyr83, wncyr100, wncyr118, wncyr131, wncyr160, wncyr180, wncyr210, wncyr250}},
+   {   -999,{    NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL,     NULL}}
   }
  #endif
   ; /* --- end-of-ssfonttable[] --- */
@@ -514,10 +525,12 @@ subraster *rastmiddle();		/* handle \left...\middle...\right */
 subraster *rastarray();			/* handle \array{...} */
 subraster *rastpicture();		/* handle \picture(,){...} */
 subraster *rastline();			/* handle \line(xinc,yinc){xlen} */
+subraster *rastrule();			/* handle \rule[lift]{width}{height}*/
 subraster *rastcircle();		/* handle \circle(xdiam[,ydiam]) */
 subraster *rastbezier();		/*handle\bezier(c0,r0)(c1,r1)(ct,rt)*/
 subraster *rastraise();			/* handle \raisebox{lift}{expr} */
 subraster *rastrotate();		/* handle \rotatebox{degs}{expr} */
+subraster *rastreflect();		/* handle \reflectbox[axis]{expr} */
 subraster *rastfbox();			/* handle \fbox{expr} */
 subraster *rastinput();			/* handle \input{filename} */
 subraster *rastcounter();		/* handle \counter{filename} */
@@ -550,12 +563,14 @@ subraster *rastnoop();			/* handle \escape's to be flushed */
 #define	ISADJACENTWT	(63)		/* set anti-aliasing adjacent weight*/
 #define	ISCORNERWT	(64)		/* set anti-aliasing adjacent weight*/
 #define	PNMPARAMS	(65)		/* set fgalias,fgonly,bgalias,bgonly*/
+#define	ISGAMMA		(66)		/* set gamma correction */
 #define	ISSHRINK	(7)		/* set supersampling shrinkfactor */
 #define	UNITLENGTH	(8)		/* set unitlength */
 #define	ISCOLOR		(9)		/* set color */
 #define	ISREVERSE	(10)		/* set reverse video colors */
 #define	ISSTRING	(11)		/* set ascii string mode */
 #define	ISSMASH		(12)		/* set (minimum) "smash" margin */
+#define	ISCONTENTTYPE	(13)		/*enable/disable Content-type lines*/
 
 /* ---
  * mathchardefs for symbols recognized by mimetex
@@ -593,11 +608,13 @@ STATIC	mathchardef symtable[]
     { "\\tabular",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastarray) },
     { "\\picture",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastpicture) },
     { "\\line", NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastline) },
+    { "\\rule", NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastrule) },
     { "\\circle", NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastcircle) },
     { "\\bezier", NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastbezier) },
     { "\\qbezier",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastbezier) },
     { "\\raisebox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastraise) },
     { "\\rotatebox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastrotate) },
+    { "\\reflectbox",NOVALUE,NOVALUE,NOVALUE,(HANDLER)(rastreflect) },
     { "\\fbox", NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastfbox) },
     { "\\input",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rastinput) },
     { "\\today",NOVALUE,NOVALUE,NOVALUE,  (HANDLER)(rasttoday) },
@@ -615,9 +632,12 @@ STATIC	mathchardef symtable[]
     { "~",	5,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },
     { "\\ ",	5,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },
     { " ",	5,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },
+    { "\\!",	-2,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },
+    /*{ "\\!*",	-2,	     99,NOVALUE,  (HANDLER)(rastspace) },*/
     { "\\quad",	6,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },
     { "\\qquad",10,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },
     { "\\hspace",0,	NOVALUE,NOVALUE,  (HANDLER)(rastspace) },
+    { "\\hspace*",0,	     99,NOVALUE,  (HANDLER)(rastspace) },
     { "\\vspace",0,	NOVALUE,      1,  (HANDLER)(rastspace) },
     { "\\hfill",0,	      1,NOVALUE,  (HANDLER)(rastspace) },
     /* --- newline --- */
@@ -646,6 +666,7 @@ STATIC	mathchardef symtable[]
     { "\\text",		  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\textrm",	  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\mathrm",	  7,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
+    { "\\cyr",		  8,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\mathbf",	  6,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\bf",		  6,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
     { "\\mathtt",	  3,	 NOVALUE,NOVALUE, (HANDLER)(rastfont) },
@@ -697,7 +718,10 @@ STATIC	mathchardef symtable[]
     { "\\lowpass",    ISSUPER,         0,NOVALUE, (HANDLER)(rastflags) },
     { "\\aaalg",ISAAALGORITHM,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
     { "\\pnmparams",PNMPARAMS,   NOVALUE,NOVALUE, (HANDLER)(rastflags) },
+    { "\\gammacorrection",ISGAMMA,NOVALUE,NOVALUE,(HANDLER)(rastflags) },
+    { "\\nocontenttype",ISCONTENTTYPE, 0,NOVALUE, (HANDLER)(rastflags) },
     { "\\opaque",    ISOPAQUE,         0,NOVALUE, (HANDLER)(rastflags) },
+    { "\\transparent",ISOPAQUE,        1,NOVALUE, (HANDLER)(rastflags) },
     { "\\squash",    ISSMASH,          3,1,       (HANDLER)(rastflags) },
     { "\\smash",     ISSMASH,          3,1,       (HANDLER)(rastflags) },
     { "\\nosquash",  ISSMASH,          0,NOVALUE, (HANDLER)(rastflags) },
@@ -767,8 +791,10 @@ STATIC	mathchardef symtable[]
     { "\\bigskip",   0, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) },
     { "\\phantom",   1, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) },
     { "\\nocaching", 0, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) },
+    { "\\noconten",  0, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) },
     { "\\nonumber",  0, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) },
-    { "\\!",         0, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) },
+    /* { "\\!",      0, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) }, */
+    { "\\cydot",     0, NOVALUE,NOVALUE,  (HANDLER)(rastnoop) },
     /* --------------------- C M M I --------------------------
           symbol     charnum    family    class	    function
     -------------------------------------------------------- */
@@ -780,7 +806,7 @@ STATIC	mathchardef symtable[]
     { "\\Xi",		4,	CMMI10,   VARIABLE,	NULL },
     { "\\Pi",		5,	CMMI10,   VARIABLE,	NULL },
     { "\\Sigma",	6,	CMMI10,   VARIABLE,	NULL },
-    { "\\littlesum",	6,	CMMI10,   OPERATOR,	NULL },
+    { "\\smallsum",	6,	CMMI10,   OPERATOR,	NULL },
     { "\\Upsilon",	7,	CMMI10,   VARIABLE,	NULL },
     { "\\Phi",		8,	CMMI10,   VARIABLE,	NULL },
     { "\\Psi",		9,	CMMI10,   VARIABLE,	NULL },
@@ -912,8 +938,8 @@ STATIC	mathchardef symtable[]
     { "y",		121,	CMMI10,   VARIABLE,	NULL },
     { "z",		122,	CMMI10,   VARIABLE,	NULL },
     /* --- miscellaneous symbols and relations --- */
-    { "\\imath",	123,	CMMI10,   ORDINARY,	NULL },
-    { "\\jmath",	124,	CMMI10,   ORDINARY,	NULL },
+    { "\\imath",	123,	CMMI10,   VARIABLE,	NULL },
+    { "\\jmath",	124,	CMMI10,   VARIABLE,	NULL },
     { "\\wp",		125,	CMMI10,   ORDINARY,	NULL },
     { "\\vec",		126,	CMMI10,   ORDINARY,	NULL },
     /* --------------------- C M M I B ------------------------
@@ -927,7 +953,7 @@ STATIC	mathchardef symtable[]
     { "\\Xi",		4,	CMMIB10,  VARIABLE,	NULL },
     { "\\Pi",		5,	CMMIB10,  VARIABLE,	NULL },
     { "\\Sigma",	6,	CMMIB10,  VARIABLE,	NULL },
-    { "\\littlesum",	6,	CMMIB10,  OPERATOR,	NULL },
+    { "\\smallsum",	6,	CMMIB10,  OPERATOR,	NULL },
     { "\\Upsilon",	7,	CMMIB10,  VARIABLE,	NULL },
     { "\\Phi",		8,	CMMIB10,  VARIABLE,	NULL },
     { "\\Psi",		9,	CMMIB10,  VARIABLE,	NULL },
@@ -1057,8 +1083,8 @@ STATIC	mathchardef symtable[]
     { "y",		121,	CMMIB10,  VARIABLE,	NULL },
     { "z",		122,	CMMIB10,  VARIABLE,	NULL },
     /* --- miscellaneous symbols and relations --- */
-    { "\\imath",	123,	CMMIB10,  ORDINARY,	NULL },
-    { "\\jmath",	124,	CMMIB10,  ORDINARY,	NULL },
+    { "\\imath",	123,	CMMIB10,  VARIABLE,	NULL },
+    { "\\jmath",	124,	CMMIB10,  VARIABLE,	NULL },
     { "\\wp",		125,	CMMIB10,  ORDINARY,	NULL },
     { "\\bfvec",	126,	CMMIB10,  ORDINARY,	NULL },
     /* --------------------- C M S Y --------------------------
@@ -1227,7 +1253,7 @@ STATIC	mathchardef symtable[]
     { "\\surd",		112,	CMSY10,   OPERATOR,	NULL },
     { "\\amalg",	113,	CMSY10,   BINARYOP,	NULL },
     { "\\nabla",	114,	CMSY10,   VARIABLE,	NULL },
-    { "\\littleint",	115,	CMSY10,   OPERATOR,	NULL },
+    { "\\smallint",	115,	CMSY10,   OPERATOR,	NULL },
     { "\\sqcup",	116,	CMSY10,   OPERATOR,	NULL },
     { "\\sqcap",	117,	CMSY10,   OPERATOR,	NULL },
     { "\\sqsubseteq",	118,	CMSY10,   RELATION,	NULL },
@@ -1254,7 +1280,7 @@ STATIC	mathchardef symtable[]
     { "\\Xi",		4,	CMR10,   VARIABLE,	NULL },
     { "\\Pi",		5,	CMR10,   VARIABLE,	NULL },
     { "\\Sigma",	6,	CMR10,   VARIABLE,	NULL },
-    { "\\littlesum",	6,	CMR10,   OPERATOR,	NULL },
+    { "\\smallsum",	6,	CMR10,   OPERATOR,	NULL },
     { "\\Upsilon",	7,	CMR10,   VARIABLE,	NULL },
     { "\\Phi",		8,	CMR10,   VARIABLE,	NULL },
     { "\\Psi",		9,	CMR10,   VARIABLE,	NULL },
@@ -1311,8 +1337,8 @@ STATIC	mathchardef symtable[]
     { "*",		42,	CMR10,   BINARYOP,	NULL },
     { "+",		43,	CMR10,   BINARYOP,	NULL },
     { "/",		47,	CMR10,   BINARYOP,	NULL },
-    { ":",		58,	CMR10,   BINARYOP,	NULL },
-    { ";",		59,	CMR10,   BINARYOP,	NULL },
+    { ":",		58,	CMR10,   ORDINARY,	NULL },
+    { ";",		59,	CMR10,   ORDINARY,	NULL },
     { "=",		61,	CMR10,   RELATION,	NULL },
     { "?",		63,	CMR10,   BINARYOP,	NULL },
     { "@",		64,	CMR10,   BINARYOP,	NULL },
@@ -1617,7 +1643,7 @@ STATIC	mathchardef symtable[]
     { "\\Xi",		4,     BBOLD10,   VARIABLE,	NULL },
     { "\\Pi",		5,     BBOLD10,   VARIABLE,	NULL },
     { "\\Sigma",	6,     BBOLD10,   VARIABLE,	NULL },
-    { "\\littlesum",	6,     BBOLD10,   OPERATOR,	NULL },
+    { "\\smallsum",	6,     BBOLD10,   OPERATOR,	NULL },
     { "\\Upsilon",	7,     BBOLD10,   VARIABLE,	NULL },
     { "\\Phi",		8,     BBOLD10,   VARIABLE,	NULL },
     { "\\Psi",		9,     BBOLD10,   VARIABLE,	NULL },
@@ -1744,8 +1770,8 @@ STATIC	mathchardef symtable[]
     { "-",		45,    BBOLD10,   BINARYOP,	NULL },
     { ".",		46,    BBOLD10,   PUNCTION,	NULL },
     { "/",		47,    BBOLD10,   BINARYOP,	NULL },
-    { ":",		58,    BBOLD10,   BINARYOP,	NULL },
-    { ";",		59,    BBOLD10,   BINARYOP,	NULL },
+    { ":",		58,    BBOLD10,   ORDINARY,	NULL },
+    { ";",		59,    BBOLD10,   ORDINARY,	NULL },
     { "<",		60,    BBOLD10,   RELATION,	NULL },
     { "\\<",		60,    BBOLD10,   RELATION,	NULL },
     { "\\cdot",		61,    BBOLD10,   BINARYOP,	NULL },
@@ -1761,6 +1787,225 @@ STATIC	mathchardef symtable[]
     { "\\]",		93,    BBOLD10,   CLOSING,	NULL },
     { "|",		124,   BBOLD10,   BINARYOP,	NULL },
     { "\\-",		123,   BBOLD10,   BINARYOP,	NULL },
+    /* ------------------- S T M A R Y ------------------------
+          symbol     charnum    family    class	    function
+    -------------------------------------------------------- */
+    /* --- stmaryrd symbols (see stmaryrd.sty for defs) --- */
+    { "\\shortleftarrow",   0, STMARY10,  ARROW,	NULL },
+    { "\\shortrightarrow",  1, STMARY10,  ARROW,	NULL },
+    { "\\shortuparrow",     2, STMARY10,  ARROW,	NULL },
+    { "\\shortdownarrow",   3, STMARY10,  ARROW,	NULL },
+    { "\\Yup",		    4, STMARY10,  BINARYOP,	NULL },
+    { "\\Ydown",	    5, STMARY10,  BINARYOP,	NULL },
+    { "\\Yleft",	    6, STMARY10,  BINARYOP,	NULL },
+    { "\\Yright",	    7, STMARY10,  BINARYOP,	NULL },
+    { "\\varcurlyvee",	    8, STMARY10,  BINARYOP,	NULL },
+    { "\\varcurlywedge",    9, STMARY10,  BINARYOP,	NULL },
+    { "\\minuso",	   10, STMARY10,  BINARYOP,	NULL },
+    { "\\baro",		   11, STMARY10,  BINARYOP,	NULL },
+    { "\\sslash",	   12, STMARY10,  BINARYOP,	NULL },
+    { "\\bblash",	   13, STMARY10,  BINARYOP,	NULL },
+    { "\\moo",		   14, STMARY10,  BINARYOP,	NULL },
+    { "\\varotimes",	   15, STMARY10,  BINARYOP,	NULL },
+    { "\\varoast",	   16, STMARY10,  BINARYOP,	NULL },
+    { "\\varobar",	   17, STMARY10,  BINARYOP,	NULL },
+    { "\\varodot",	   18, STMARY10,  BINARYOP,	NULL },
+    { "\\varoslash",	   19, STMARY10,  BINARYOP,	NULL },
+    { "\\varobslash",	   20, STMARY10,  BINARYOP,	NULL },
+    { "\\varocircle",	   21, STMARY10,  BINARYOP,	NULL },
+    { "\\varoplus",	   22, STMARY10,  BINARYOP,	NULL },
+    { "\\varominus",	   23, STMARY10,  BINARYOP,	NULL },
+    { "\\boxast",	   24, STMARY10,  BINARYOP,	NULL },
+    { "\\boxbar",	   25, STMARY10,  BINARYOP,	NULL },
+    { "\\boxdot",	   26, STMARY10,  BINARYOP,	NULL },
+    { "\\boxslash",	   27, STMARY10,  BINARYOP,	NULL },
+    { "\\boxbslash",	   28, STMARY10,  BINARYOP,	NULL },
+    { "\\boxcircle",	   29, STMARY10,  BINARYOP,	NULL },
+    { "\\boxbox",	   30, STMARY10,  BINARYOP,	NULL },
+    { "\\boxempty",	   31, STMARY10,  BINARYOP,	NULL },
+    { "\\qed",		   31, STMARY10,  BINARYOP,	NULL },
+    { "\\lightning",	   32, STMARY10,  ORDINARY,	NULL },
+    { "\\merge",	   33, STMARY10,  BINARYOP,	NULL },
+    { "\\vartimes",	   34, STMARY10,  BINARYOP,	NULL },
+    { "\\fatsemi",	   35, STMARY10,  BINARYOP,	NULL },
+    { "\\sswarrow",	   36, STMARY10,  ARROW,	NULL },
+    { "\\ssearrow",	   37, STMARY10,  ARROW,	NULL },
+    { "\\curlywedgeuparrow",38,STMARY10,  ARROW,	NULL },
+    { "\\curlywedgedownarrow",39,STMARY10,ARROW,	NULL },
+    { "\\fatslash",	   40, STMARY10,  BINARYOP,	NULL },
+    { "\\fatbslash",	   41, STMARY10,  BINARYOP,	NULL },
+    { "\\lbag",		   42, STMARY10,  BINARYOP,	NULL },
+    { "\\rbag",		   43, STMARY10,  BINARYOP,	NULL },
+    { "\\varbigcirc",	   44, STMARY10,  BINARYOP,	NULL },
+    { "\\leftrightarroweq",45, STMARY10,  ARROW,	NULL },
+    { "\\curlyveedownarrow",46,STMARY10,  ARROW,	NULL },
+    { "\\curlyveeuparrow", 47, STMARY10,  ARROW,	NULL },
+    { "\\nnwarrow",	   48, STMARY10,  ARROW,	NULL },
+    { "\\nnearrow",	   49, STMARY10,  ARROW,	NULL },
+    { "\\leftslice",	   50, STMARY10,  BINARYOP,	NULL },
+    { "\\rightslice",	   51, STMARY10,  BINARYOP,	NULL },
+    { "\\varolessthan",	   52, STMARY10,  BINARYOP,	NULL },
+    { "\\varogreaterthan", 53, STMARY10,  BINARYOP,	NULL },
+    { "\\varovee",	   54, STMARY10,  BINARYOP,	NULL },
+    { "\\varowedge",	   55, STMARY10,  BINARYOP,	NULL },
+    { "\\talloblong",	   56, STMARY10,  BINARYOP,	NULL },
+    { "\\interleave",	   57, STMARY10,  BINARYOP,	NULL },
+    { "\\obar",		   58, STMARY10,  BINARYOP,	NULL },
+    { "\\oslash",	   59, STMARY10,  BINARYOP,	NULL },
+    { "\\olessthan",	   60, STMARY10,  BINARYOP,	NULL },
+    { "\\ogreaterthan",	   61, STMARY10,  BINARYOP,	NULL },
+    { "\\ovee",		   62, STMARY10,  BINARYOP,	NULL },
+    { "\\owedge",	   63, STMARY10,  BINARYOP,	NULL },
+    { "\\oblong",	   64, STMARY10,  BINARYOP,	NULL },
+    { "\\inplus",	   65, STMARY10,  RELATION,	NULL },
+    { "\\niplus",	   66, STMARY10,  RELATION,	NULL },
+    { "\\nplus",	   67, STMARY10,  BINARYOP,	NULL },
+    { "\\subsetplus",	   68, STMARY10,  RELATION,	NULL },
+    { "\\supsetplus",	   69, STMARY10,  RELATION,	NULL },
+    { "\\subsetpluseq",	   70, STMARY10,  RELATION,	NULL },
+    { "\\supsetpluseq",	   71, STMARY10,  RELATION,	NULL },
+    { "\\Lbag",		   72, STMARY10,  OPENING,	NULL },
+    { "\\Rbag",		   73, STMARY10,  CLOSING,	NULL },
+    { "\\llbracket",	   74, STMARY10,  OPENING,	NULL },
+    { "\\rrbracket",	   75, STMARY10,  CLOSING,	NULL },
+    { "\\llparenthesis",   76, STMARY10,  OPENING,	NULL },
+    { "\\rrparenthesis",   77, STMARY10,  CLOSING,	NULL },
+    { "\\binampersand",	   78, STMARY10,  OPENING,	NULL },
+    { "\\bindnasrepma",	   79, STMARY10,  CLOSING,	NULL },
+    { "\\trianglelefteqslant",80,STMARY10,RELATION,	NULL },
+    { "\\trianglerighteqslant",81,STMARY10,RELATION,	NULL },
+    { "\\ntrianglelefteqslant",82,STMARY10,RELATION,	NULL },
+    { "\\ntrianglerighteqslant",83,STMARY10,RELATION,	NULL },
+    { "\\llfloor",	   84, STMARY10,  OPENING,	NULL },
+    { "\\rrfloor",	   85, STMARY10,  CLOSING,	NULL },
+    { "\\llceil",	   86, STMARY10,  OPENING,	NULL },
+    { "\\rrceil",	   87, STMARY10,  CLOSING,	NULL },
+    { "\\arrownot",	   88, STMARY10,  RELATION,	NULL },
+    { "\\Arrownot",	   89, STMARY10,  RELATION,	NULL },
+    { "\\Mapstochar",	   90, STMARY10,  RELATION,	NULL },
+    { "\\mapsfromchar",	   91, STMARY10,  RELATION,	NULL },
+    { "\\Mapsfromchar",	   92, STMARY10,  RELATION,	NULL },
+    { "\\leftrightarrowtriangle",93,STMARY10,BINARYOP,	NULL },
+    { "\\leftarrowtriangle",94,STMARY10,  RELATION,	NULL },
+    { "\\rightarrowtriangle",95,STMARY10, RELATION,	NULL },
+    { "\\bigtriangledown", 96, STMARY10,  OPERATOR,	NULL },
+    { "\\bigtriangleup",   97, STMARY10,  OPERATOR,	NULL },
+    { "\\bigcurlyvee",	   98, STMARY10,  OPERATOR,	NULL },
+    { "\\bigcurlywedge",   99, STMARY10,  OPERATOR,	NULL },
+    { "\\bigsqcap",	  100, STMARY10,  OPERATOR,	NULL },
+    { "\\Bigsqcap",	  100, STMARY10,  OPERATOR,	NULL },
+    { "\\bigbox",	  101, STMARY10,  OPERATOR,	NULL },
+    { "\\bigparallel",	  102, STMARY10,  OPERATOR,	NULL },
+    { "\\biginterleave",  103, STMARY10,  OPERATOR,	NULL },
+    { "\\bignplus",	  112, STMARY10,  OPERATOR,	NULL },
+    /* ---------------------- C Y R ---------------------------
+          symbol     charnum    family    class	    function
+    -------------------------------------------------------- */
+    /* ---
+     * undefined: 20,21,28,29,33-59,61,63,64,91,92,93,96,123,124
+     * ---------------------------------------------------------- */
+    /* --- special characters --- */
+    { "\\cyddot",	32,	CYR10,   VARIABLE,	NULL },
+    /* ---See amsfndoc.dvi Figure 1 Input Conventions for AMS cyrillic--- */
+    { "A",		65,	CYR10,   VARIABLE,	NULL },
+    { "a",		97,	CYR10,   VARIABLE,	NULL },
+    { "B",		66,	CYR10,   VARIABLE,	NULL },
+    { "b",		98,	CYR10,   VARIABLE,	NULL },
+    { "V",		86,	CYR10,   VARIABLE,	NULL },
+    { "v",		118,	CYR10,   VARIABLE,	NULL },
+    { "G",		71,	CYR10,   VARIABLE,	NULL },
+    { "g",		103,	CYR10,   VARIABLE,	NULL },
+    { "D",		68,	CYR10,   VARIABLE,	NULL },
+    { "d",		100,	CYR10,   VARIABLE,	NULL },
+    { "Dj",		6,	CYR10,   VARIABLE,	NULL },
+    { "DJ",		6,	CYR10,   VARIABLE,	NULL },
+    { "dj",		14,	CYR10,   VARIABLE,	NULL },
+    { "E",		69,	CYR10,   VARIABLE,	NULL },
+    { "e",		101,	CYR10,   VARIABLE,	NULL },
+    { "\\\"E",		19,	CYR10,   VARIABLE,	NULL },
+    { "\\\"e",		27,	CYR10,   VARIABLE,	NULL },
+    { "\\=E",		5,	CYR10,   VARIABLE,	NULL },
+    { "\\=e",		13,	CYR10,   VARIABLE,	NULL },
+    { "Zh",		17,	CYR10,   VARIABLE,	NULL },
+    { "ZH",		17,	CYR10,   VARIABLE,	NULL },
+    { "zh",		25,	CYR10,   VARIABLE,	NULL },
+    { "Z",		90,	CYR10,   VARIABLE,	NULL },
+    { "z",		122,	CYR10,   VARIABLE,	NULL },
+    { "I",		73,	CYR10,   VARIABLE,	NULL },
+    { "i",		105,	CYR10,   VARIABLE,	NULL },
+    { "\\=I",		4,	CYR10,   VARIABLE,	NULL },
+    { "\\=\\i",		12,	CYR10,   VARIABLE,	NULL },
+    { "J",		74,	CYR10,   VARIABLE,	NULL },
+    { "j",		106,	CYR10,   VARIABLE,	NULL },
+    { "\\u I",		18,	CYR10,   VARIABLE,	NULL },
+    { "\\u\\i",		26,	CYR10,   VARIABLE,	NULL },
+    { "K",		75,	CYR10,   VARIABLE,	NULL },
+    { "k",		107,	CYR10,   VARIABLE,	NULL },
+    { "L",		76,	CYR10,   VARIABLE,	NULL },
+    { "l",		108,	CYR10,   VARIABLE,	NULL },
+    { "Lj",		1,	CYR10,   VARIABLE,	NULL },
+    { "LJ",		1,	CYR10,   VARIABLE,	NULL },
+    { "lj",		9,	CYR10,   VARIABLE,	NULL },
+    { "M",		77,	CYR10,   VARIABLE,	NULL },
+    { "m",		109,	CYR10,   VARIABLE,	NULL },
+    { "N",		78,	CYR10,   VARIABLE,	NULL },
+    { "n",		110,	CYR10,   VARIABLE,	NULL },
+    { "Nj",		0,	CYR10,   VARIABLE,	NULL },
+    { "NJ",		0,	CYR10,   VARIABLE,	NULL },
+    { "nj",		8,	CYR10,   VARIABLE,	NULL },
+    { "O",		79,	CYR10,   VARIABLE,	NULL },
+    { "o",		111,	CYR10,   VARIABLE,	NULL },
+    { "P",		80,	CYR10,   VARIABLE,	NULL },
+    { "p",		112,	CYR10,   VARIABLE,	NULL },
+    { "R",		82,	CYR10,   VARIABLE,	NULL },
+    { "r",		114,	CYR10,   VARIABLE,	NULL },
+    { "S",		83,	CYR10,   VARIABLE,	NULL },
+    { "s",		115,	CYR10,   VARIABLE,	NULL },
+    { "T",		84,	CYR10,   VARIABLE,	NULL },
+    { "t",		116,	CYR10,   VARIABLE,	NULL },
+    { "\\\'C",		7,	CYR10,   VARIABLE,	NULL },
+    { "\\\'c",		15,	CYR10,   VARIABLE,	NULL },
+    { "U",		85,	CYR10,   VARIABLE,	NULL },
+    { "u",		117,	CYR10,   VARIABLE,	NULL },
+    { "F",		70,	CYR10,   VARIABLE,	NULL },
+    { "f",		102,	CYR10,   VARIABLE,	NULL },
+    { "Kh",		72,	CYR10,   VARIABLE,	NULL },
+    { "KH",		72,	CYR10,   VARIABLE,	NULL },
+    { "kh",		104,	CYR10,   VARIABLE,	NULL },
+    { "Ts",		67,	CYR10,   VARIABLE,	NULL },
+    { "TS",		67,	CYR10,   VARIABLE,	NULL },
+    { "ts",		99,	CYR10,   VARIABLE,	NULL },
+    { "Ch",		81,	CYR10,   VARIABLE,	NULL },
+    { "CH",		81,	CYR10,   VARIABLE,	NULL },
+    { "ch",		113,	CYR10,   VARIABLE,	NULL },
+    { "Dzh",		2,	CYR10,   VARIABLE,	NULL },
+    { "DZH",		2,	CYR10,   VARIABLE,	NULL },
+    { "dzh",		10,	CYR10,   VARIABLE,	NULL },
+    { "Sh",		88,	CYR10,   VARIABLE,	NULL },
+    { "SH",		88,	CYR10,   VARIABLE,	NULL },
+    { "sh",		120,	CYR10,   VARIABLE,	NULL },
+    { "Shch",		87,	CYR10,   VARIABLE,	NULL },
+    { "SHCH",		87,	CYR10,   VARIABLE,	NULL },
+    { "shch",		119,	CYR10,   VARIABLE,	NULL },
+    { "\\Cdprime",	95,	CYR10,   VARIABLE,	NULL },
+    { "\\cdprime",	127,	CYR10,   VARIABLE,	NULL },
+    { "Y",		89,	CYR10,   VARIABLE,	NULL },
+    { "y",		121,	CYR10,   VARIABLE,	NULL },
+    { "\\Cprime",	94,	CYR10,   VARIABLE,	NULL },
+    { "\\cprime",	126,	CYR10,   VARIABLE,	NULL },
+    { "\\`E",		3,	CYR10,   VARIABLE,	NULL },
+    { "\\`e",		11,	CYR10,   VARIABLE,	NULL },
+    { "Yu",		16,	CYR10,   VARIABLE,	NULL },
+    { "YU",		16,	CYR10,   VARIABLE,	NULL },
+    { "yu",		24,	CYR10,   VARIABLE,	NULL },
+    { "Ya",		23,	CYR10,   VARIABLE,	NULL },
+    { "YA",		23,	CYR10,   VARIABLE,	NULL },
+    { "ya",		31,	CYR10,   VARIABLE,	NULL },
+    { "\\Dz",		22,	CYR10,   VARIABLE,	NULL },
+    { "\\dz",		30,	CYR10,   VARIABLE,	NULL },
+    { "N0",		125,	CYR10,   VARIABLE,	NULL },
+    { "<",		60,	CYR10,   VARIABLE,	NULL },
+    { ">",		62,	CYR10,   VARIABLE,	NULL },
     /* --- trailer record --- */
     { NULL,		-999,	-999,	-999,		NULL }
  }

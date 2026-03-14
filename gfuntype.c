@@ -331,11 +331,14 @@ Allocations and Declarations
 -------------------------------------------------------------------------- */
 /* --- recognized font family names and our corresponding numbers --- */
 static	char *fnames[] =	/*font name from -n switch on command line*/
-	{ "cmr","cmmib","cmmi","cmsy","cmex","bbold","rsfs",NULL };
+	{ "cmr","cmmib","cmmi","cmsy","cmex","bbold","rsfs",
+	  "stmary","cyr", NULL };
 static	int    fnums[] =	/* corresponding mimetex fontfamily number*/
-	{ CMR10,CMMIB10,CMMI10,CMSY10,CMEX10,BBOLD10,RSFS10,  -1 };
+	{ CMR10,CMMIB10,CMMI10,CMSY10,CMEX10,BBOLD10,RSFS10,
+       STMARY10,  CYR10,    -1 };
 static	int    offsets[] =	/* symtable[ichar].charnum = charnum-offset*/
-	{     0,      0,     0,     0,     0,      0,    65,  -1 };
+	{     0,      0,     0,     0,     0,      0,    65,
+	      0,      0,    -1 };
 /* --- other local declarations --- */
 char	*charname = NULL;	/* character name returned to caller */
 char	flower[99] = "noname";	/* lowercase caller's fontname */

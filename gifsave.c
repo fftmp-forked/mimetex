@@ -71,8 +71,11 @@ typedef unsigned char Byte;     /* exactly one byte (8 bits) */
 static FILE *OutFile = NULL;    /* file to write to */
 static Byte *OutBuffer = NULL;	/* (added by j.forkosh) */
 static int isCloseOutFile = 0;	/* " */
+#if !defined(MAXGIFSZ)		/* " */
+  #define MAXGIFSZ 131072	/* " max #bytes comprising gif image */
+#endif				/* " */
 int gifSize = 0;		/* " #bytes comprising gif */
-int maxgifSize = 32000;		/* " max #bytes written to OutBuffer */
+int maxgifSize = MAXGIFSZ;	/* " max #bytes written to OutBuffer */
 
 /* used when writing to a file bitwise */
 static Byte Buffer[256];        /* there must be one more than `needed' */
