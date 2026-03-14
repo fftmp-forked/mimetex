@@ -393,7 +393,8 @@
  * 03/23/09	J.Forkosh	Version 1.71 released.
  * 11/18/09	J.Forkosh	Version 1.72 released.
  * 11/15/11	J.Forkosh	Version 1.73 released.
- * 12/07/11	J.Forkosh	Most recent revision (also see REVISIONDATE)
+ * 02/15/12	J.Forkosh	Version 1.74 released.
+ * 02/15/12	J.Forkosh	Most recent revision (also see REVISIONDATE)
  * See  http://www.forkosh.com/mimetexchangelog.html  for further details.
  *
  ****************************************************************************/
@@ -401,8 +402,8 @@
 /* -------------------------------------------------------------------------
 Program id
 -------------------------------------------------------------------------- */
-#define	VERSION "1.73"		/* mimeTeX version number */
-#define REVISIONDATE "07 December 2011" /* date of most recent revision */
+#define	VERSION "1.74"		/* mimeTeX version number */
+#define REVISIONDATE "15 February 2012" /* date of most recent revision */
 #define COPYRIGHTTEXT "Copyright(c) 2002-2012, John Forkosh Associates, Inc."
 
 /* -------------------------------------------------------------------------
@@ -960,7 +961,7 @@ miscellaneous macros
 #define	dmod(x,y)  ((x)-((y)*((double)((int)((x)/(y)))))) /*x%y for doubles*/
 #endif
 #define compress(s,c) if((s)!=NULL)	/* remove embedded c's from s */ \
-	{ char *p; while((p=strchr((s),(c)))!=NULL) strcpy(p,p+1); } else
+	{ char *p; while((p=strchr((s),(c)))!=NULL) {strsqueeze(p,1);} } else
 #define	slower(s)  if ((s)!=NULL)	/* lowercase all chars in s */ \
 	{ char *p=(s); while(*p!='\000'){*p=tolower(*p); p++;} } else
 /*subraster *subrastcpy();*/		/* need global module declaration */
@@ -982,7 +983,7 @@ miscellaneous macros
 	    (thisstr)[thislen] = '\000'; \
 	  else break; \
 	if ( (thislen = strspn((thisstr)," \t\n\r\f\v")) > 0 ) \
-	  strcpy((thisstr),(thisstr)+thislen); } else
+	  {strsqueeze((thisstr),thislen);} } else
 /* --- strncpy() n bytes and make sure it's null-terminated --- */
 #define	strninit(target,source,n) if( (target)!=NULL && (n)>=0 ) { \
 	  char *thissource = (source); \
@@ -990,6 +991,15 @@ miscellaneous macros
 	  if ( (n)>0 && thissource!=NULL ) { \
 	    strncpy((target),thissource,(n)); \
 	    (target)[(n)] = '\000'; } }
+/* --- strcpy(s,s+n) using memmove() (also works for negative n) --- */
+#define	strsqueeze(s,n) if((n)!=0) { if(!isempty((s))) { \
+	int thislen3=strlen(s); \
+	if ((n) >= thislen3) *(s) = '\000'; \
+	else memmove(s,s+(n),1+thislen3-(n)); }} else/*user supplies final;*/
+/* --- strsqueeze(s,t) with two pointers --- */
+#define	strsqueezep(s,t) if(!isempty((s))&&!isempty((t))) { \
+	int sqlen=strlen((s))-strlen((t)); \
+	if (sqlen>0 && sqlen<=999) {strsqueeze((s),sqlen);} } else
 
 /* ---
  * PART2
@@ -4682,10 +4692,10 @@ for ( idef=0; ;idef++ )			/* until trailer record found */
     {
     strcpy(lcsymbol,defsym);		/* local copy of symdefs[] symbol */
     if ( isunesc && *lcsymbol=='\\' )	/* ignored leading \ in symbol */
-     strcpy(lcsymbol,lcsymbol+1);	/* so squeeze it out of lcsymbol too*/
+     {strsqueeze(lcsymbol,1);}		/*so squeeze it out of lcsymbol too*/
     if ( 0 )				/* don't ignore case */
-     for ( symptr=lcsymbol; *symptr!='\000'; symptr++ ) /*for each symbol ch*/
-      if ( isalpha(*symptr) ) *symptr=tolower(*symptr); /*lowercase the char*/
+     for ( symptr=lcsymbol; *symptr!='\000'; symptr++ )/*for each symbol ch*/
+      if ( isalpha(*symptr) ) *symptr=tolower(*symptr);/*lowercase the char*/
     deflen = strlen(lcsymbol);		/* #chars in symbol we're checking */
     if ((symptr=strstr(lcsymbol,unescsymbol)) != NULL) /*found caller's sym*/
      if ( (isoint || strstr(lcsymbol,"oint")==NULL) /* skip unwanted "oint"*/
@@ -5668,7 +5678,8 @@ if ( (dollar=strchr(expression,'$'))	/* $ signals preceding preamble */
 	*size = (isdelta? *size+sizevalue : sizevalue); /* so reset size */
       /* --- finally, set flag and shift size parameter out of preamble --- */
       isfontsize = 1;			/*set flag showing font size present*/
-      if ( comma != NULL ) strcpy(pretext,comma+1);/*leading size param gone*/
+      if ( comma != NULL )		/*2/15/12-isn't this superfluous???*/
+        {strsqueezep(pretext,comma+1);}	/* squeeze out leading size param */
      } /* --- end-of-if(comma!=NULL||etc) --- */
     /* --- copy any preamble params following size to caller's subexpr --- */
     if ( comma != NULL || !isfontsize )	/*preamb contains params past size*/
@@ -6018,7 +6029,7 @@ while ( (leftptr=strstr(expptr,leftcomment)) != NULL ) /*found leftcomment*/
 	{ *leftptr = '\000';		/*so terminate expr at leftcomment*/
 	  break; }			/* and stop looking for comments */
        *leftptr = '~';			/* replace entire comment by ~ */
-       strcpy(leftptr+1,tokptr);	/* and squeeze out comment */
+       strsqueezep(leftptr+1,tokptr);	/* squeeze out comment */
        goto next_comment; }		/* stop looking for rightcomment */
   /* --- no rightcomment after opening leftcomment --- */
   *leftptr = '\000';			/* so terminate expression */
@@ -6171,7 +6182,7 @@ for(isymbol=0; (htmlsym=symbols[isymbol].html) != NULL; isymbol++)
 	/* --- replace #`iarg` in macro with argval --- */
 	sprintf(argsignal,"#%d",iarg);	/* #1...#9 signals argument */
 	while ( (argsigptr=strstr(argval,argsignal)) != NULL ) /* #1...#9 */
-	 strcpy(argsigptr,argsigptr+strlen(argsignal)); /*can't be in argval*/
+	 {strsqueeze(argsigptr,strlen(argsignal));} /* can't be in argval */
 	while ( (argsigptr=strstr(abuff,argsignal)) != NULL ) /* #1...#9 */
 	 strchange(strlen(argsignal),argsigptr,argval); /*replaced by argval*/
 	} /* --- end-of-for(iarg) --- */
@@ -6197,7 +6208,7 @@ if ( xlateleft )			/* \left...\right xlation wanted */
   while ( (tokptr=strstr(expptr,lrstr)) != NULL ) /* found \left or \right */
     {
     if ( isthischar(*(tokptr+lrlen),braces) ) /* followed by a 1-char brace*/
-      {	strcpy(tokptr+1,tokptr+lrlen);	/* so squeeze out "left" or "right"*/
+      {	strsqueeze((tokptr+1),(lrlen-1));/*so squeeze out "left" or "right"*/
 	expptr = tokptr+2; }		/* and resume search past brace */
     else				/* may be a "long" brace like \| */
       {
@@ -6205,7 +6216,7 @@ if ( xlateleft )			/* \left...\right xlation wanted */
       for(isymbol=0; (lrsym=lrfrom[isymbol]) != NULL; isymbol++)
 	{ int symlen = strlen(lrsym);	/* #chars in delim, e.g., 2 for \| */
 	  if ( memcmp(tokptr+lrlen,lrsym,symlen) == 0 ) /* found long delim*/
-	    { strcpy(tokptr+1,tokptr+lrlen+symlen-1); /* squeeze out delim */
+	    { strsqueeze((tokptr+1),(lrlen+symlen-2)); /*squeeze out delim*/
 	      *(tokptr+1) = *(lrto[isymbol]); /* last char now 1-char delim*/
 	      expptr = tokptr+2 - lrlen; /* resume search past 1-char delim*/
 	      break; }			/* no need to check more lrsym's */
@@ -6253,7 +6264,7 @@ for(isymbol=0; (atopsym=atopcommands[isymbol]) != NULL; isymbol++)
 	arg[rightlen] = '}';		/* add closing } */
 	arg[rightlen+1] = '\000';	/* and null terminate it */
 	if ( isthischar(*arg,WHITEMATH) ) /* 1st char was mandatory space */
-	  strcpy(arg,arg+1);		/* so squeeze it out */
+	  {strsqueeze(arg,1);}		/* so squeeze it out */
 	strcat(command,arg);		/* concatanate right-arg} */
 	if (close!=NULL) strcat(command,close); /* add close delim if needed*/
 	strchange(totlen-2,leftbrace+1,command); /* {\atop} --> {\atop{}{}} */
@@ -6302,7 +6313,7 @@ int	tolen = (to==NULL?0:strlen(to)), /* #chars in replacement string */
 shift from left or right to accommodate replacement of its nfirst chars by to
 -------------------------------------------------------------------------- */
 if ( tolen < nfirst )			/* shift left is easy */
-  strcpy(from,from+nshift);		/* because memory doesn't overlap */
+  {strsqueeze(from,nshift);}		/* memmove avoids overlap memory */
 if ( tolen > nfirst )			/* need more room at start of from */
   { char *pfrom = from+strlen(from);	/* ptr to null terminating from */
     for ( ; pfrom>=from; pfrom-- )	/* shift all chars including null */
@@ -6442,9 +6453,9 @@ if ( white != NULL )			/*user provided ptr to white string*/
  if ( *white != '\000' ) {		/*and it's not just an empty string*/
    strcpy(whitespace,white);		/* so use caller's white spaces */
    while ( (pwhite=strchr(whitespace,'i')) != NULL ) /* have an embedded i */
-     strcpy(pwhite,pwhite+1);		/* so squeeze it out */
+     {strsqueeze(pwhite,1);}		/* so squeeze it out */
    while ( (pwhite=strchr(whitespace,'I')) != NULL ) /* have an embedded I */
-     strcpy(pwhite,pwhite+1);		/* so squeeze it out */
+     {strsqueeze(pwhite,1);}		/* so squeeze it out */
    if ( *whitespace == '\000' )		/* caller's white just had i,I */
      strcpy(whitespace,WHITEMATH); }	/* so revert back to default */
 /* -------------------------------------------------------------------------
@@ -6774,7 +6785,7 @@ int	isstrstr ( char *string, char *snippets, int iscase )
 Allocations and Declarations
 -------------------------------------------------------------------------- */
 int	status = 0;			/*1 if any snippet found in string*/
-char	snip[99], *snipptr = snippets,	/* munge through each snippet */
+char	snip[256], *snipptr = snippets,	/* munge through each snippet */
 	delim = ',', *delimptr = NULL;	/* separated by delim's */
 char	stringcp[4096], *cp = stringcp;	/*maybe lowercased copy of string*/
 /* -------------------------------------------------------------------------
@@ -6796,7 +6807,7 @@ while ( snipptr != NULL )		/* while we still have snippets */
   /* --- extract next snippet --- */
   if ( (delimptr = strchr(snipptr,delim)) /* locate next comma delim */
   ==   NULL )				/*not found following last snippet*/
-    { strcpy(snip,snipptr);		/* local copy of last snippet */
+    { strninit(snip,snipptr,255);	/* local copy of last snippet */
       snipptr = NULL; }			/* signal end-of-string */
   else					/* snippet ends just before delim */
     { int sniplen = (int)(delimptr-snipptr) - 1;  /* #chars in snippet */
@@ -6947,7 +6958,7 @@ if ( (delim = strchr(token,'(')) != NULL ) { /* token contains a ( */
     token[--toklen] = '\000';		/* remove trailing ) */
   /* --- handle parenthesized subexpression --- */
   if ( *token == '(' ) {		/* have parenthesized expression */
-    strcpy(token,token+1);		/* so squeeze out leading ( */
+    strsqueeze(token,1);		/* so squeeze out leading ( */
     /* --- evaluate edited term --- */
     trimwhite(token);			/* trim leading/trailing whitespace*/
     termval = evalterm(store,token); }	/* evaluate token recursively */
@@ -7066,7 +7077,7 @@ int unescape_url(char *url, int isescape) {
       int  urllen = strlen(url);	/* total length of url string */
       /* --- first, entirely remove ctrlchars from beginning and end --- */
       if ( seglen > 0 ) {		/*have ctrlchars at start of string*/
-	strcpy(url,url+seglen);		/* squeeze out initial ctrlchars */
+	strsqueeze(url,seglen);		/* squeeze out initial ctrlchars */
 	urllen -= seglen; }		/* string is now shorter */
       while ( --urllen >= 0 )		/* now remove ctrlchars from end */
 	if ( isthischar(url[urllen],ctrlchars) ) /* ctrlchar at end */
@@ -7468,7 +7479,7 @@ if ( isthischar(*expression,ESCAPE) )	/* expression begins with \escape */
 /* --- get expression *without* enclosing parens --- */
 strcpy(noparens,expression);		/* get local copy of expression */
 noparens[explen-(1+isescape)] = '\000';	/* null-terminate before right} */
-strcpy(noparens,noparens+(1+isescape));	/* and then squeeze out left{ */
+strsqueeze(noparens,(1+isescape));	/* and then squeeze out left{ */
 /* --- rasterize it --- */
 if ( (sp = rasterize(noparens,size))	/*rasterize "interior" of expression*/
 ==   NULL ) goto end_of_job;		/* quit if failed */
@@ -8040,7 +8051,7 @@ for ( idelim=0; opdelims[idelim]!=NULL; idelim++ )
   if ( strstr(ldelim,opdelims[idelim]) != NULL ) /* found operator */
     { margin += opmargin;		/* extra height for operator */
       if ( *ldelim == '\\' )		/* have leading escape */
-	strcpy(ldelim,ldelim+1);	/* squeeze it out */
+	{strsqueeze(ldelim,1);}		/* squeeze it out */
       break; }				/* no need to check rest of table */
 /* --- xlate delimiters and check for textstyle --- */
 for ( idelim=1; idelim<=2; idelim++ ) {	/* 1=left, 2=right */
@@ -8373,7 +8384,7 @@ switch ( flag )
 	  if ( !isthischar(*valuearg,"?") ) /*leading ? is query for value*/
 	   { isdelta = isthischar(*valuearg,"+-"); /* leading + or - */
 	     if ( memcmp(valuearg,"--",2) == 0 ) /* leading -- signals...*/
-	       { isdelta=0; strcpy(valuearg,valuearg+1); } /* ...not delta */
+	       { isdelta=0; strsqueeze(valuearg,1); } /* ...not delta */
 	     switch ( flag ) {		/* convert to double or int */
 	      default: argvalue = atoi(valuearg); break; /* convert to int */
 	      case ISGAMMA:
@@ -9784,7 +9795,7 @@ blevel++;				/* count \begin...\begin...'s */
 exprptr = texsubexpr(*expression,subexpr,0,"{","}",0,0);
 if ( *subexpr == '\000' ) goto end_of_job; /* no environment given */
 while ( (delims=strchr(subexpr,'*')) != NULL ) /* have environment* */
-  strcpy(delims,delims+1);		/* treat it as environment */
+  {strsqueeze(delims,1);}		/* treat it as environment */
 /* --- look up environment in our table --- */
 for ( ienviron=0; ;ienviron++ )		/* search table till NULL */
   if ( environs[ienviron] == NULL )	/* found NULL before match */
@@ -10265,7 +10276,7 @@ while ( 1 )				/* scan chars till end */
           len = iround(unitlength*((double)evalue)); /* len in pixels */
           if ( len>=(-63) && len<=255 ) { /* sanity check */
             vrowspace[nrows] = len;	/* extra vspace before this row */
-	    strcpy(token,tokptr);	/* flush [len] from token */
+	    strsqueezep(token,tokptr);	/* flush [len] from token */
             tokptr=token; skipwhite(tokptr); } } /* reset ptr, skip white */
         } /* --- end-of-if(*tokptr=='[') --- */
       /* --- now check for \hline or \hdash --- */
@@ -10283,7 +10294,7 @@ while ( 1 )				/* scan chars till end */
 	    { istokwhite = 1;		/* so token contains \hline only */
 	      if ( iseox ) ishonly = 1; } /* ignore entire row at eox */
 	  else				/* token contains more than \hline */
-	    strcpy(token,tokptr); }	/* so flush \hline from token */
+	    {strsqueezep(token,tokptr);} } /* so flush \hline */
       } /* --- end-of-if(ncols[nrows]==0) --- */
     /* --- rasterize completed token --- */
     toksp[ntokens] = (istokwhite? NULL : /* don't rasterize empty token */
@@ -10601,7 +10612,8 @@ while ( *picptr != '\000' )		/* until we run out of pic_elems */
   if ( *putptr != '\000' )		/*check for put data after preamble*/
    {
    /* --- first squeeze preamble out of put expression --- */
-   if ( *pream != '\000' ) strcpy(putexpr,putptr); /* squeeze out preamble */
+   if ( *pream != '\000' )		/* have preamble */
+     {strsqueezep(putexpr,putptr);}	/* squeeze it out */
    /* --- interpret x,y --- */
    if ( (multptr=strchr(putexpr,';')) != NULL ) /*semicolon signals multiput*/
      *multptr = '\000';			/* replace semicolon by '\0' */
@@ -12382,7 +12394,7 @@ while ( strreplace(editname,"....",NULL,0) > 0 ) ;  /* squeeze out ....'s */
 /* --- remove leading / and \ and dots (and blanks) --- */
 if ( *editname != '\000' )		/* still have chars in filename */
  while ( isthischar(*editname," ./\\") ) /* absolute paths invalid */
-   strcpy(editname,editname+1);		/* so flush leading / or \ (or ' ')*/
+   {strsqueeze(editname,1);}		/* so flush leading / or \ (or ' ')*/
 if ( *editname == '\000' ) goto end_of_job; /* no chars left in filename */
 /* --- remove leading or embedded ../'s and ..\'s --- */
 while ( strreplace(editname,"../",NULL,0) > 0 ) ;  /* squeeze out ../'s */
@@ -12466,7 +12478,8 @@ while ( fgets(text,MAXLINESZ-1,fp) != (char *)NULL ) { /*read input till eof*/
     case 0: status = 1; break;		/* no tag to look for */
     case 1:				/* looking for opening left <tag> */
       if ( (tagp=strstr(text,tag1)) == NULL ) break; /*haven't found it yet*/
-      strcpy(text,tagp+strlen(tag1));	/* shift out preceding text */
+      tagp += strlen(tag1);		/* first char past tag */
+      strsqueezep(text,tagp);		/*shift out preceding text and tag*/
       tagnum = 2;			/*now looking for closing right tag*/
     case 2:				/* looking for closing right </tag> */
       if ( (tagp=strstr(text,tag2)) == NULL ) break; /*haven't found it yet*/
@@ -12575,7 +12588,7 @@ if ( istag )				/* only replacing tag in file */
   {
   /* --- preprocess filebuff --- */
   if ( tagp2 != (char *)NULL )		/* apparently have ...</tag> */
-    strcpy(filebuff,tagp2+tlen2);	/* so get rid of leading ...</tag> */
+    {strsqueezep(filebuff,tagp2+tlen2);} /* remove ...</tag> */
   if ( (flen = strlen(filebuff))	/* #chars currently in buffer */
   > 0 )					/* we have non-empty buffer */
    if (!isthischar(*(filebuff+flen-1),"\n\r")) /*no newline at end of file*/
@@ -13146,12 +13159,12 @@ trimwhite(pruned);			/*remove leading/trailing whitespace*/
 /* --- first remove leading http:// --- */
 if ( (delim=strstr(pruned,"://")) != NULL ) /* found http:// or ftp:// etc */
   if ( ((int)(delim-pruned)) <= 8 ) {	/* make sure it's a prefix */
-    strcpy(pruned,delim+3);		/* squeeze out leading http:// */
+    strsqueezep(pruned,delim+3);	/* squeeze out leading http:// */
     trimwhite(pruned); }		/*remove leading/trailing whitespace*/
 /* --- next remove leading www. --- */
 if ( (delim=strstr(pruned,"www.")) != NULL ) /* found www. */
   if ( ((int)(delim-pruned)) == 0 ) {	/* make sure it's the leading chars*/
-    strcpy(pruned,delim+4);		/* squeeze out leading www. */
+    strsqueezep(pruned,delim+4);	/* squeeze out leading www. */
     trimwhite(pruned); }		/*remove leading/trailing whitespace*/
 /* --- finally remove leading / and everything following it --- */
 if ( (delim=strchr(pruned,'/')) != NULL ) /* found first / */
@@ -13168,7 +13181,7 @@ while ( ((int)(delim-pruned)) > 0 ) {	/* don't back up before first char */
     *delim = '\000';			/* truncate pruned url */
     ndots = 0; }			/* and reset dot count */
   if ( ndots >= n ) {			/* have all requested levels */
-    strcpy(pruned,delim+1);		/* squeeze out any leading levels */
+    strsqueezep(pruned,delim+1);	/* squeeze out leading levels */
     break; }				/* and we're done */
   } /* --- end-of-while() --- */
 purl = pruned;				/*completed okay, return pruned url*/
@@ -15486,7 +15499,7 @@ if ( iscaching ) {			/* images are being cached */
   strcpy(cachepath,CACHEPATH);		/* relative path to cached files */
   if ( *cachepath == '%' ) {		/* leading % signals cache headers */
     iscachecontenttype = 1;		/* signal caching mime content-type*/
-    strcpy(cachepath,cachepath+1); } }	/* and squeeze out leading % char */
+    strsqueeze(cachepath,1); } }	/* and squeeze out leading % char */
 gifSize = 0;				/* signal that image not in memory */
 fgred=FGRED; fggreen=FGGREEN; fgblue=FGBLUE; /* default foreground colors */
 bgred=BGRED; bggreen=BGGREEN; bgblue=BGBLUE; /* default background colors */
@@ -15502,7 +15515,7 @@ if ( query != NULL )			/* check query string from environ */
     expression[MAXEXPRSZ] = '\000';	/* make sure it's null terminated */
     if ( 0 )				/*true to remove leading whitespace*/
       while ( isspace(*expression) && *expression!='\000' )
-        strcpy(expression,expression+1); /* squeeze out white space */
+        {strsqueeze(expression,1);}	/* squeeze out white space */
     isquery = 1; }			/* and set isquery flag */
 if ( !isquery ) {			/* empty query string */
   char *host = getenv("HTTP_HOST"),	/* additional getenv("") results */
@@ -15645,7 +15658,7 @@ if ( isquery ) {				/* must be <form method="get"> */
  if ( !memcmp(expression,"formdata",8) ) /*must be <input name="formdata"> */
   { char *delim=strchr(expression,'=');	/* find equal following formdata */
     if ( delim != (char *)NULL )	/* found unescaped equal sign */
-      strcpy(expression,delim+1);	/* so shift name= out of expression*/
+      {strsqueezep(expression,delim+1);} /* so shift name= out */
     while ( (delim=strchr(expression,'+')) != NULL ) /*unescaped plus sign*/
       *delim = ' ';			/* is "shorthand" for blank space */
     /*unescape_url(expression,1);*/	/* convert unescaped %xx's to chars */
@@ -15673,7 +15686,7 @@ if ( isquery )				/* only check queries */
       {	*delim = '\000';		/* replace delim with null */
 	if ( seclevel <= 9 )		/* permit msglevel specification */
 	  msglevel = atoi(expression+9); /* interpret ### in msglevel###$ */
-	strcpy(expression,delim+1); } }	/* shift out prefix and delim */
+	strsqueezep(expression,delim+1); } } /* squeeze out prefix & delim */
  /* --- next check for logfile=xxx$ prefix (must follow msglevel) --- */
  if ( !memcmp(expression,"logfile=",8) ) /* query has logfile= prefix */
    { char *delim=strchr(expression,'$'); /* find $ delim following logfile=*/
@@ -15681,7 +15694,7 @@ if ( isquery )				/* only check queries */
       {	*delim = '\000';		/* replace delim with null */
 	if ( seclevel <= 3 )		/* permit logfile specification */
 	  strcpy(logfile,expression+8);	/* interpret xxx in logfile=xxx$ */
-	strcpy(expression,delim+1); } }	/* shift out prefix and delim */
+	strsqueezep(expression,delim+1); } } /* squeeze out prefix & delim */
  } /* --- end-of-if(isquery) --- */
 /* ---
  * log query (e.g., for debugging)
@@ -15748,7 +15761,7 @@ if ( isquery )				/* only log query_string's */
 if ( 1 || isquery )			/* queries or command-line */
  if ( *exprprefix != '\000' )		/* we have a prefix string */
   { int npref = strlen(exprprefix);	/* #chars in prefix */
-    memmove(expression+npref+1,expression,strlen(expression)+1); /*make room*/
+    memmove(expression+npref+1,expression,strlen(expression)+1);/*make room*/
     memcpy(expression,exprprefix,npref); /* copy prefix into expression */
     expression[npref] = '{';		/* followed by { */
     strcat(expression,"}"); }		/* and terminating } to balance { */
@@ -16610,7 +16623,7 @@ strcpy(adbuffer,message);		/* copy message template to buffer */
 /* --- replace %%expression%% in template with expression --- */
   strreplace(adbuffer,"%%expression%%",expression,0);
 /* --- replace original expression --- */
-strcpy(expression,adbuffer);		/* expression mow wrapped in ad */
+strcpy(expression,adbuffer);		/* expression now wrapped in ad */
 return ( 1 );				/* always just return 1 */
 } /* --- end-of-function advertisement() --- */
 
