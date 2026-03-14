@@ -1,3 +1,5 @@
+# web archive
+
 ## 2005-12-11
 URL: https://web.archive.org/web/20051211130446/http://www.forkosh.dreamhost.com/mimetex.zip  
 description: 1.60+ first version available from web archive  
@@ -104,3 +106,34 @@ md5: 94f5ca56551df61981082d1e9fbb2d65
 sha: f18993c425a03f242b2ce4b19df241d44d19154e  
 sha256: 3bbe279b45af64380a72ee08e826d6d8939b519c7a17cf86851efe4675b1ad23  
 b2: 5550a069b60888d99f7a8193f3d6a9da33ff850e20f2eaacfd308e3ad1e7c372abbf3436818e9b67b13e7cdbaa59a29e3fab67e618ca67872816aeec86772c1c  
+
+# debian
+`for f in README gfuntype.c gifsave.c mimetx.c mimetex.h mimetex.html texfonts.h; do wget https://sources.debian.org/data/main/m/mimetex/$(basename $(pwd))/$f; done; wget https://sources.debian.org/data/main/m/mimetex/$(basename $(pwd)).checksums;`
+
+# ubuntu
+##   mimetex_1.73.orig.tar.gz
+URL: https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/mimetex/1.73-2/mimetex_1.73.orig.tar.gz  
+description: 1.73
+md5: 72a4040e946335480a8523ca29dfb373  
+sha: e620e6c7105366974fd0b9932443216446f2f586  
+sha256: f888f327a4fcffe0d25bec9b47c0c62c416fe2c4ba82999c1ee5786c4ef94f66  
+b2: 0add0555bde8cb75ba90984aa2184dcc846540201434835382a954c7ce10552aa75362eccf743ab3f2e814a432c986c00bb0d17e236c07d2ecfd923970d15194  
+
+
+# bsd
+##   mimetex-1.65.tar.gz
+URL: https://mirror.ihost.md/openbsd/distfiles/by_cipher/sha256/Y0/Y0ScspM23nblOzVyX0OEk0ZzhQ2Pw2Nfo67gaARcu9Q%3D/mimetex-1.65.tar.gz  
+description: 1.65  
+md5: 34cc08a9c49c901fa8f3f3b034f15062  
+sha: cc7bcb86bb25ca7c9ac3a931c1b5d651e016e8ed  
+sha256: 63449cb29336de76e53b35725f4384934673850d8fc3635fa3aee068045cbbd4  
+b2: 20a2de3adf86c71c24f20b812c843c37f8ebfd4204337ca4611d946068622eb6b225bc69a4d9a2f7bbce32e4508156583fb508b22a33e4fd10ccc697a1539f9c  
+
+
+##   mimetex-1.72.tar.gz
+URL: https://archive.netbsd.org/pub/pkgsrc-archive/distfiles/2024Q4/mimetex-1.72/mimetex.zip?key=NetBSD  
+description: 1.72  
+md5: d1530fc8609829d17f01dc62460e38a7  
+sha: f6f06bc7ea44108a318fe32cc501932b05eae7cc  
+sha256: df1b6cb2937354a5de0e0bbc8c133bb338fa0bfa494b9c69faf354c3122e449e  
+b2: a74c368e7e4519da45d4c8554e5fb569591c618b7efed1585a0d2f0640512a43ceb6a0ca2c5e245631d3dbe72877d8c11b16788e79917f7ae4ca95aea6c057e4  
