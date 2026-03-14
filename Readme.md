@@ -101,7 +101,7 @@ b2: e5f60ac99300fe9adb7d69e6e8d06483986da0fdcecbe81a1a962fa4dbe87af843966ff2b356
 
 ## 2019-04-16
 URL: https://web.archive.org/web/20190416074544/http://forkosh.com/mimetex.zip  
-description: 1.75+  
+description: 1.75+ version from 2017-06.  
 md5: 94f5ca56551df61981082d1e9fbb2d65  
 sha: f18993c425a03f242b2ce4b19df241d44d19154e  
 sha256: 3bbe279b45af64380a72ee08e826d6d8939b519c7a17cf86851efe4675b1ad23  
