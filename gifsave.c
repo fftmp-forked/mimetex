@@ -20,7 +20,9 @@
 #include <string.h>		/* " */
 /* --- windows-specific header info --- */
 #ifndef WINDOWS			/* -DWINDOWS not supplied by user */
-  #if defined(_WIN32)		/* try to recognize windows environments */
+  #if defined(_WINDOWS) || defined(_WIN32) || defined(WIN32) \
+  ||  defined(DJGPP)		/* try to recognize windows compilers */ \
+  ||  defined(_USRDLL)		/* must be WINDOWS if compiling for DLL */
     #define WINDOWS		/* signal windows */
   #endif
 #endif
@@ -67,7 +69,10 @@ typedef unsigned char Byte;     /* exactly one byte (8 bits) */
 
 /* used by IO-routines */
 static FILE *OutFile = NULL;    /* file to write to */
-static int isCloseOutFile = 0;	/* (added by j.forkosh) */
+static Byte *OutBuffer = NULL;	/* (added by j.forkosh) */
+static int isCloseOutFile = 0;	/* " */
+int gifSize = 0;		/* " #bytes comprising gif */
+int maxgifSize = 32000;		/* " max #bytes written to OutBuffer */
 
 /* used when writing to a file bitwise */
 static Byte Buffer[256];        /* there must be one more than `needed' */
@@ -154,7 +159,10 @@ static int  (*GetPixel)(int x, int y);
  *                rewrite file IO.
  *
  *  INPUT         filename
- *                        name of file to create
+ *                        name of file to create,
+ *                        or NULL for stdout,
+ *                        or if *filename='\000' then it's the address of
+ *                           a memory buffer to which gif will be written
  *
  *  RETURNS       GIF_OK       - OK
  *                GIF_ERRWRITE - Error opening the file
@@ -162,7 +170,10 @@ static int  (*GetPixel)(int x, int y);
 static int
 Create(const char *filename)
 {
-    if ( filename == NULL )			/* (added by j.forkosh) */
+    OutBuffer = NULL;				/* (added by j.forkosh) */
+    isCloseOutFile = 0;				/* " */
+    gifSize = 0;				/* " */
+    if ( filename == NULL )			/* " */
       {	OutFile = stdout;			/* " */
 	/*OutFile = fdopen(STDOUT_FILENO,"wb");*/ /* " doesn't work, */
 	#ifdef WINDOWS				/* "   so instead... */
@@ -179,9 +190,12 @@ Create(const char *filename)
 	#endif					/* " */
       }						/* " */
     else					/* " */
-      {	if ((OutFile = fopen(filename, "wb")) == NULL)
-	  return GIF_ERRCREATE;
-	isCloseOutFile = 1; }			/* (added by j.forkosh) */
+      if ( *filename != '\000' )		/* " */
+	{ if ((OutFile = fopen(filename, "wb")) == NULL)
+	    return GIF_ERRCREATE;
+	  isCloseOutFile = 1; }			/* (added by j.forkosh) */
+      else					/* " */
+	OutBuffer = (Byte *)filename;		/* " */
     return GIF_OK;
 }
 
@@ -202,8 +216,13 @@ Create(const char *filename)
 static int
 Write(const void *buf, unsigned len)
 {
-    if (fwrite(buf, sizeof(Byte), len, OutFile) < len)
-        return GIF_ERRWRITE;
+    if ( OutBuffer == NULL )			/* (added by j.forkosh) */
+      {	if (fwrite(buf, sizeof(Byte), len, OutFile) < len)
+	  return GIF_ERRWRITE; }
+    else					/* (added by j.forkosh) */
+      {	if ( gifSize+len <= maxgifSize )	/* " */
+	  memcpy(OutBuffer+gifSize,buf,len); }	/* " */
+    gifSize += len;				/* " */
     return GIF_OK;
 }
 
@@ -223,8 +242,13 @@ Write(const void *buf, unsigned len)
 static int
 WriteByte(Byte b)
 {
-    if (putc(b, OutFile) == EOF)
-        return GIF_ERRWRITE;
+    if ( OutBuffer == NULL )			/* (added by j.forkosh) */
+      {	if (putc(b, OutFile) == EOF)
+	  return GIF_ERRWRITE; }
+    else					/* (added by j.forkosh) */
+      {	if ( gifSize < maxgifSize )		/* " */
+	  OutBuffer[gifSize] = b; }		/* " */
+    gifSize++;					/* " */
     return GIF_OK;
 }
 
@@ -245,10 +269,16 @@ WriteByte(Byte b)
 static int
 WriteWord(Word w)
 {
-    if (putc(w & 0xFF, OutFile) == EOF)
-        return GIF_ERRWRITE;
-    if (putc((w >> 8), OutFile) == EOF)
-        return GIF_ERRWRITE;
+    if ( OutBuffer == NULL )			/* (added by j.forkosh) */
+      {	if (putc(w & 0xFF, OutFile) == EOF)
+	  return GIF_ERRWRITE;
+	if (putc((w >> 8), OutFile) == EOF)
+	  return GIF_ERRWRITE; }
+    else					/* (added by j.forkosh) */
+      if ( gifSize+1 < maxgifSize )		/* " */
+	{ OutBuffer[gifSize] = (Byte)(w & 0xFF);  /* " */
+	  OutBuffer[gifSize+1] = (Byte)(w >> 8); }  /* " */
+    gifSize += 2;				/* " */
     return GIF_OK;
 }
 
@@ -265,6 +295,8 @@ Close(void)
 {
     if ( isCloseOutFile )			/* (added by j.forkosh) */
       fclose(OutFile);
+    OutBuffer = NULL;				/* (added by j.forkosh) */
+    isCloseOutFile = 0;				/* " */
 }
 
 

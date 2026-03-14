@@ -1,10 +1,10 @@
 
  --------------------------------------------------------------------------
- October 2, 2004                                               Version 1.50
+ November 30, 2004                                             Version 1.60
 
                   m i m e T e X   R e a d m e   F i l e
 
- Copyright(c) 2002-2004, John Forkosh Associates, Inc. All rights reserved.
+ Copyright(c) 2002-2005, John Forkosh Associates, Inc. All rights reserved.
  --------------------------------------------------------------------------
 
                             by: John Forkosh
@@ -176,6 +176,7 @@ III.  COMPILATION AND INSTALLATION
 
 IV.  REVISION HISTORY
 ------------------------------------------------------------------------
+  11/30/04  J.Forkosh      version 1.60 (beta) released
   10/02/04  J.Forkosh      version 1.50 released on CTAN with various new
                            features and fixes, and updated documentation.
   07/18/04  J.Forkosh      version 1.40 re-released on CTAN with minor
